@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { db, auth } from "../firebase";
+import { db, auth } from "../Firebase.js";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 export default function CreatePost() {
