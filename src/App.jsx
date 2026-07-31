@@ -1,11 +1,9 @@
 import React from "react";
-import AppRoutes from "./Routes/AppRoutes"; // Verifique se a pasta é "Routes" ou "routes" (maiúscula/minúscula)
+import AppRoutes from "./Routes/AppRoutes";
 
 function App() {
   return (
-    <div className="App font-sans antialiased text-gray-900 bg-gray-100 min-h-screen">
-      <AppRoutes />
-    </div>
+    <AppRoutes />
   );
 }
 

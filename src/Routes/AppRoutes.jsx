@@ -3,6 +3,9 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../firebase";
 
+// Componente da Navbar
+import Navbar from "../Components/Navbar";
+
 // Páginas do Projeto ConectMoz
 import Splash from "../Pages/Splash";
 import Login from "../Pages/Login";
@@ -36,21 +39,27 @@ export default function AppRoutes() {
 
   return (
     <BrowserRouter>
-      <Routes>
-        {/* Rotas Públicas (Apenas para utilizadores não autenticados) */}
-        <Route path="/" element={user ? <Navigate to="/home" /> : <Splash />} />
-        <Route path="/login" element={user ? <Navigate to="/home" /> : <Login />} />
-        <Route path="/register" element={user ? <Navigate to="/home" /> : <Register />} />
+      {/* Exibe a Navbar do topo apenas se o utilizador estiver autenticado */}
+      {user && <Navbar />}
 
-        {/* Rotas Protegidas (Requerem login) */}
-        <Route path="/home" element={user ? <Home /> : <Navigate to="/login" />} />
-        <Route path="/jobs" element={user ? <Jobs /> : <Navigate to="/login" />} />
-        <Route path="/chat" element={user ? <Chat /> : <Navigate to="/login" />} />
-        <Route path="/profile" element={user ? <Profile /> : <Navigate to="/login" />} />
+      {/* Se o utilizador estiver autenticado, adiciona o padding 'pt-28' para o conteúdo não ficar debaixo da Navbar */}
+      <div className={user ? "pt-28 min-h-screen bg-gray-100" : "min-h-screen"}>
+        <Routes>
+          {/* Rotas Públicas (Sem Navbar) */}
+          <Route path="/" element={user ? <Navigate to="/home" /> : <Splash />} />
+          <Route path="/login" element={user ? <Navigate to="/home" /> : <Login />} />
+          <Route path="/register" element={user ? <Navigate to="/home" /> : <Register />} />
 
-        {/* Rota de Redirecionamento Padrão */}
-        <Route path="*" element={<Navigate to={user ? "/home" : "/"} />} />
-      </Routes>
+          {/* Rotas Protegidas (Com Navbar) */}
+          <Route path="/home" element={user ? <Home /> : <Navigate to="/login" />} />
+          <Route path="/jobs" element={user ? <Jobs /> : <Navigate to="/login" />} />
+          <Route path="/chat" element={user ? <Chat /> : <Navigate to="/login" />} />
+          <Route path="/profile" element={user ? <Profile /> : <Navigate to="/login" />} />
+
+          {/* Rota de Redirecionamento Padrão */}
+          <Route path="*" element={<Navigate to={user ? "/home" : "/"} />} />
+        </Routes>
+      </div>
     </BrowserRouter>
   );
 }
