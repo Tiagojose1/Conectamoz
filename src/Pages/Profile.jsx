@@ -1,182 +1,176 @@
-import React, { useState, useEffect } from "react";
-import { auth, db } from "../firebase";
-import { updateProfile, signOut } from "firebase/auth";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
-import Navbar from "../Components/Navbar";
-import BottomNavigation from "../Components/BottomNavigation";
+import React, { useState, useEffect, useRef } from "react";
+import { auth, db, storage } from "../firebase";
+import { updateProfile } from "firebase/auth";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
+import { FaCamera, FaUserEdit, FaArrowLeft } from "react-icons/fa";
+import { useNavigate } from "react-router-dom";
 import PostCard from "../Components/PostCard";
+import BottomNavigation from "../Components/BottomNavigation";
 
 export default function Profile() {
-  const user = auth.currentUser;
+  const currentUser = auth.currentUser;
+  const navigate = useNavigate();
 
-  const [nome, setNome] = useState(user?.displayName || "");
-  const [editando, setEditando] = useState(false);
-  const [loadingSave, setLoadingSave] = useState(false);
-  const [meusPosts, setMeusPosts] = useState([]);
-  const [loadingPosts, setLoadingPosts] = useState(true);
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [carregandoFoto, setCarregandoFoto] = useState(false);
+  const [photoURL, setPhotoURL] = useState(currentUser?.photoURL || "");
 
-  // Carregar as publicações do próprio utilizador
+  const fileInputRef = useRef(null);
+
+  // Carregar apenas os posts do utilizador ligado
   useEffect(() => {
-    if (!user) return;
+    if (!currentUser) return;
 
-    const carregarMeusPosts = async () => {
-      try {
-        const q = query(
-          collection(db, "posts"),
-          where("autorId", "==", user.uid)
-        );
-        const querySnapshot = await getDocs(q);
-        const list = querySnapshot.docs.map((doc) => ({
+    const q = query(
+      collection(db, "posts"),
+      where("autorId", "==", currentUser.uid),
+      orderBy("criadoEm", "desc")
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const meusPosts = snapshot.docs.map((doc) => ({
           id: doc.id,
-          ...doc.data(),
+          ...doc.data()
         }));
-
-        // Ordenar localmente pelo mais recente
-        list.sort((a, b) => (b.criadoEm?.seconds || 0) - (a.criadoEm?.seconds || 0));
-        setMeusPosts(list);
-      } catch (error) {
-        console.error("Erro ao carregar os seus posts:", error);
-      } finally {
-        setLoadingPosts(false);
+        setPosts(meusPosts);
+        setLoading(false);
+      },
+      (error) => {
+        console.error("Erro ao carregar posts do perfil:", error);
+        setLoading(false);
       }
-    };
+    );
 
-    carregarMeusPosts();
-  }, [user]);
+    return () => unsubscribe();
+  }, [currentUser]);
 
-  // Atualizar o nome do Perfil no Firebase Auth
-  const handleSalvarPerfil = async (e) => {
-    e.preventDefault();
-    if (!nome.trim()) return;
+  // Upload da nova Foto de Perfil
+  const handleImageChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !currentUser) return;
 
     try {
-      setLoadingSave(true);
-      await updateProfile(auth.currentUser, {
-        displayName: nome.trim(),
-      });
-      setEditando(false);
-      alert("Perfil atualizado com sucesso!");
+      setCarregandoFoto(true);
+      const storageRef = ref(storage, `profiles/${currentUser.uid}_${Date.now()}`);
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+
+      // Atualizar no Firebase Auth
+      await updateProfile(currentUser, { photoURL: downloadURL });
+      setPhotoURL(downloadURL);
     } catch (error) {
-      console.error("Erro ao atualizar perfil:", error);
-      alert("Não foi possível atualizar o perfil.");
+      console.error("Erro ao atualizar foto de perfil:", error);
     } finally {
-      setLoadingSave(false);
+      setCarregandoFoto(false);
     }
   };
 
-  // Função de Logout (Terminar Sessão)
-  const handleLogout = async () => {
-    if (window.confirm("Tem certeza que deseja sair da sua conta?")) {
-      try {
-        await signOut(auth);
-      } catch (error) {
-        console.error("Erro ao fazer logout:", error);
-      }
-    }
-  };
+  const userInitial = currentUser?.displayName 
+    ? currentUser.displayName[0].toUpperCase() 
+    : (currentUser?.email ? currentUser.email[0].toUpperCase() : "U");
 
   return (
     <div className="min-h-screen bg-gray-100 pb-24">
-      <Navbar user={user} />
+      {/* Barra Topo com Botão Voltar */}
+      <div className="bg-white border-b sticky top-0 z-10 px-4 py-3 flex items-center gap-3">
+        <button onClick={() => navigate("/")} className="text-gray-600 hover:text-black">
+          <FaArrowLeft size={18} />
+        </button>
+        <h2 className="font-bold text-gray-800 text-lg">Perfil</h2>
+      </div>
 
-      <main className="max-w-xl mx-auto pt-4 px-4 space-y-4">
+      <main className="max-w-xl mx-auto px-2 sm:px-4 pt-2">
         {/* Cartão de Perfil */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border text-center space-y-4 relative">
-          {/* Foto de Perfil (Avatar com Inicial) */}
-          <div className="w-20 h-20 mx-auto rounded-full bg-blue-600 text-white flex items-center justify-center text-3xl font-bold shadow-md">
-            {(user?.displayName || user?.email || "U").charAt(0).toUpperCase()}
-          </div>
+        <div className="bg-white rounded-xl shadow-sm border overflow-hidden mb-4">
+          {/* Capa */}
+          <div className="h-32 bg-gradient-to-r from-blue-600 to-indigo-600 relative"></div>
 
-          {!editando ? (
-            <div>
-              <h1 className="text-xl font-bold text-gray-800">
-                {user?.displayName || "Utilizador ConectMoz"}
-              </h1>
-              <p className="text-xs text-gray-500 mt-0.5">{user?.email}</p>
+          {/* Foto e Informações */}
+          <div className="px-4 pb-4 relative">
+            <div className="flex justify-between items-end -mt-12 mb-3">
+              {/* Foto de Perfil com botão de editar */}
+              <div className="relative">
+                {photoURL ? (
+                  <img
+                    src={photoURL}
+                    alt="Perfil"
+                    className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-md bg-white"
+                  />
+                ) : (
+                  <div className="w-24 h-24 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-3xl border-4 border-white shadow-md">
+                    {userInitial}
+                  </div>
+                )}
 
-              <button
-                onClick={() => setEditando(true)}
-                className="mt-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs px-4 py-1.5 rounded-lg transition"
-              >
-                ✏️ Editar Perfil
+                <input
+                  type="file"
+                  accept="image/*"
+                  ref={fileInputRef}
+                  onChange={handleImageChange}
+                  className="hidden"
+                />
+
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={carregandoFoto}
+                  className="absolute bottom-0 right-0 bg-gray-800 hover:bg-black text-white p-2 rounded-full border-2 border-white transition shadow"
+                  title="Mudar foto de perfil"
+                >
+                  <FaCamera size={12} />
+                </button>
+              </div>
+
+              {/* Botão Editar Perfil */}
+              <button className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs px-3 py-2 rounded-lg transition border">
+                <FaUserEdit size={14} />
+                Editar perfil
               </button>
             </div>
-          ) : (
-            <form onSubmit={handleSalvarPerfil} className="space-y-3 max-w-xs mx-auto">
-              <div>
-                <label className="text-xs font-semibold text-gray-600 block text-left mb-1">
-                  Nome Completo
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  className="w-full p-2 text-sm border rounded-lg bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
 
-              <div className="flex justify-center space-x-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setEditando(false)}
-                  className="px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-100 rounded-lg font-medium"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={loadingSave}
-                  className="px-4 py-1.5 text-xs bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition disabled:opacity-50"
-                >
-                  {loadingSave ? "A guardar..." : "Guardar"}
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* Botão de Terminar Sessão (Logout) */}
-          <div className="pt-2 border-t">
-            <button
-              onClick={handleLogout}
-              className="text-xs font-semibold text-red-600 hover:text-red-800 transition"
-            >
-              🚪 Terminar Sessão (Sair)
-            </button>
+            {/* Nome e Email */}
+            <div>
+              <h3 className="font-bold text-gray-900 text-lg leading-tight">
+                {currentUser?.displayName || currentUser?.email?.split("@")[0]}
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">{currentUser?.email}</p>
+            </div>
           </div>
         </div>
 
-        {/* Minhas Publicações */}
-        <div className="space-y-3">
-          <h2 className="text-sm font-bold text-gray-700 px-1">
-            📝 As minhas publicações ({meusPosts.length})
-          </h2>
+        {/* Separador do Feed Pessoal */}
+        <div className="mb-3">
+          <h4 className="font-bold text-gray-800 text-sm">As tuas publicações</h4>
+        </div>
 
-          {loadingPosts ? (
-            <div className="text-center py-6 text-gray-500 font-medium animate-pulse text-xs">
-              A carregar as suas publicações...
-            </div>
-          ) : meusPosts.length === 0 ? (
-            <div className="text-center py-8 bg-white rounded-xl border text-gray-500 shadow-sm">
-              <p className="font-semibold text-xs text-gray-700">
-                Ainda não publicou nada.
-              </p>
-              <p className="text-[11px] text-gray-400 mt-1">
-                Vá ao Feed para partilhar ideias ou oportunidades!
-              </p>
-            </div>
-          ) : (
-            meusPosts.map((post) => (
+        {/* Publicações do Utilizador */}
+        {loading ? (
+          <div className="text-center py-10 text-gray-500 font-medium animate-pulse">
+            A carregar o teu perfil...
+          </div>
+        ) : posts.length === 0 ? (
+          <div className="text-center py-10 bg-white rounded-xl border text-gray-500">
+            <p className="font-semibold text-gray-700">Ainda não fizeste nenhuma publicação.</p>
+            <p className="text-xs text-gray-400 mt-1">Partilha algo com a comunidade no feed!</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {posts.map((post) => (
               <PostCard
                 key={post.id}
                 id={post.id}
-                author={post.autorNome || user?.displayName || "Eu"}
+                author={post.autorNome || "Utilizador"}
                 content={post.conteudo}
                 likes={post.curtidas || []}
+                imagemUrl={post.imagemUrl}
+                autorFoto={photoURL}
               />
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </main>
 
       <BottomNavigation />
