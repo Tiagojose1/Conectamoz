@@ -64,6 +64,8 @@ export default function Home() {
                 author={post.autorNome || "Utilizador"}
                 content={post.conteudo}
                 likes={post.curtidas || []}
+                imagemUrl={post.imagemUrl}
+                autorFoto={post.autorFoto}
               />
             ))}
           </div>

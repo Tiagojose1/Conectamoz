@@ -14,7 +14,7 @@ import {
 import { db, auth } from "../firebase";
 import { FaThumbsUp, FaRegThumbsUp, FaComment, FaPaperPlane } from "react-icons/fa";
 
-export default function PostCard({ id, author, content, likes = [] }) {
+export default function PostCard({ id, author, content, likes = [], imagemUrl, autorFoto }) {
   const currentUser = auth.currentUser;
   const [jaCurtiu, setJaCurtiu] = useState(false);
   const [qtdCurtidas, setQtdCurtidas] = useState(likes.length);
@@ -102,9 +102,17 @@ export default function PostCard({ id, author, content, likes = [] }) {
     <div className="bg-white rounded-xl shadow-sm border mb-4">
       {/* Cabeçalho do Post */}
       <div className="flex items-center space-x-3 p-3 pb-2">
-        <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm">
-          {author ? author.charAt(0).toUpperCase() : "U"}
-        </div>
+        {autorFoto ? (
+          <img 
+            src={autorFoto} 
+            alt={author} 
+            className="w-10 h-10 rounded-full object-cover border"
+          />
+        ) : (
+          <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm">
+            {author ? author.charAt(0).toUpperCase() : "U"}
+          </div>
+        )}
         <div>
           <h3 className="font-semibold text-gray-900 text-sm leading-tight">{author}</h3>
           <p className="text-xs text-gray-400">Publicado recentemente</p>
@@ -115,6 +123,17 @@ export default function PostCard({ id, author, content, likes = [] }) {
       <div className="px-3 py-2 text-gray-800 text-sm leading-relaxed">
         <p>{content}</p>
       </div>
+
+      {/* Imagem da Publicação (exibida caso exista) */}
+      {imagemUrl && (
+        <div className="w-full overflow-hidden my-2 border-y border-gray-100 bg-black/5">
+          <img 
+            src={imagemUrl} 
+            alt="Publicação" 
+            className="w-full max-h-96 object-cover"
+          />
+        </div>
+      )}
 
       {/* Contadores de Interação */}
       <div className="flex justify-between items-center px-3 py-1.5 text-xs text-gray-500 border-b border-gray-100">
@@ -137,7 +156,7 @@ export default function PostCard({ id, author, content, likes = [] }) {
         <button 
           onClick={handleToggleLike}
           className={`flex items-center justify-center gap-2 hover:bg-gray-100 py-2 rounded-lg flex-1 transition ${
-            jaCurtiu ? "text-blue-600" : ""
+            jaCurtiu ? "text-blue-600 font-bold" : ""
           }`}
         >
           {jaCurtiu ? <FaThumbsUp size={16} /> : <FaRegThumbsUp size={16} />}
