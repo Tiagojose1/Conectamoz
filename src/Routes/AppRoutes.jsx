@@ -14,6 +14,9 @@ import Home from "../Pages/Home";
 import Jobs from "../Pages/Jobs";
 import Chat from "../Pages/Chat";
 import Profile from "../Pages/Profile";
+import EditProfile from "../Pages/EditProfile";
+import Search from "../Pages/Search";
+import Notifications from "../Pages/Notifications";
 
 export default function AppRoutes() {
   const [user, setUser] = useState(null);
@@ -55,6 +58,9 @@ export default function AppRoutes() {
           <Route path="/jobs" element={user ? <Jobs /> : <Navigate to="/login" />} />
           <Route path="/chat" element={user ? <Chat /> : <Navigate to="/login" />} />
           <Route path="/profile" element={user ? <Profile /> : <Navigate to="/login" />} />
+          <Route path="/edit-profile" element={user ? <EditProfile /> : <Navigate to="/login" />} />
+          <Route path="/search" element={user ? <Search /> : <Navigate to="/login" />} />
+          <Route path="/notifications" element={user ? <Notifications /> : <Navigate to="/login" />} />
 
           {/* Rota de Redirecionamento Padrão */}
           <Route path="*" element={<Navigate to={user ? "/home" : "/"} />} />

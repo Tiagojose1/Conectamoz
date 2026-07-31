@@ -13,9 +13,12 @@ import {
   serverTimestamp 
 } from "firebase/firestore";
 import { FaHeart, FaRegHeart, FaRegComment, FaPaperPlane } from "react-icons/fa";
+import { useNavigate } from "react-router-dom";
+import { enviarNotificacao } from "../utils/notifications";
 
-export default function PostCard({ id, author, content, likes = [], imagemUrl, autorFoto }) {
+export default function PostCard({ id, author, autorId, content, likes = [], imagemUrl, autorFoto }) {
   const currentUser = auth.currentUser;
+  const navigate = useNavigate();
   const isLiked = currentUser ? likes.includes(currentUser.uid) : false;
 
   const [mostrarComentarios, setMostrarComentarios] = useState(false);
@@ -43,6 +46,13 @@ export default function PostCard({ id, author, content, likes = [], imagemUrl, a
     return () => unsubscribe();
   }, [id, mostrarComentarios]);
 
+  // Abrir perfil do autor do post
+  const handleVerPerfil = () => {
+    if (autorId) {
+      navigate(`/profile/${autorId}`);
+    }
+  };
+
   // Função para Curtir / Descurtir
   const handleLike = async () => {
     if (!currentUser) return;
@@ -57,6 +67,18 @@ export default function PostCard({ id, author, content, likes = [], imagemUrl, a
         await updateDoc(postRef, {
           curtidas: arrayUnion(currentUser.uid),
         });
+
+        // Disparar Notificação de Gosto 🔔
+        if (autorId) {
+          enviarNotificacao({
+            destinatarioId: autorId,
+            remetenteId: currentUser.uid,
+            remetenteNome: currentUser.displayName || currentUser.email.split("@")[0],
+            tipo: "like",
+            texto: "curtiu a tua publicação.",
+            link: "/"
+          });
+        }
       }
     } catch (error) {
       console.error("Erro ao atualizar curtida:", error);
@@ -70,13 +92,28 @@ export default function PostCard({ id, author, content, likes = [], imagemUrl, a
 
     try {
       setEnviandoComentario(true);
+      const meuNome = currentUser.displayName || currentUser.email.split("@")[0];
+
       await addDoc(collection(db, "posts", id, "comentarios"), {
         texto: novoComentario.trim(),
         autorId: currentUser.uid,
-        autorNome: currentUser.displayName || currentUser.email.split("@")[0],
+        autorNome: meuNome,
         autorFoto: currentUser.photoURL || "",
         criadoEm: serverTimestamp(),
       });
+
+      // Disparar Notificação de Comentário 🔔
+      if (autorId) {
+        enviarNotificacao({
+          destinatarioId: autorId,
+          remetenteId: currentUser.uid,
+          remetenteNome: meuNome,
+          tipo: "comment",
+          texto: "comentou na tua publicação.",
+          link: "/"
+        });
+      }
+
       setNovoComentario("");
     } catch (error) {
       console.error("Erro ao adicionar comentário:", error);
@@ -91,19 +128,26 @@ export default function PostCard({ id, author, content, likes = [], imagemUrl, a
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-4">
       {/* Cabeçalho do Post */}
       <div className="p-4 flex items-center gap-3">
-        {autorFoto ? (
-          <img
-            src={autorFoto}
-            alt={author}
-            className="w-10 h-10 rounded-full object-cover border"
-          />
-        ) : (
-          <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold">
-            {authorInitial}
-          </div>
-        )}
+        <div onClick={handleVerPerfil} className="cursor-pointer">
+          {autorFoto ? (
+            <img
+              src={autorFoto}
+              alt={author}
+              className="w-10 h-10 rounded-full object-cover border"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold">
+              {authorInitial}
+            </div>
+          )}
+        </div>
         <div>
-          <h3 className="font-bold text-gray-900 text-sm">{author}</h3>
+          <h3 
+            onClick={handleVerPerfil} 
+            className="font-bold text-gray-900 text-sm cursor-pointer hover:underline"
+          >
+            {author}
+          </h3>
           <span className="text-xs text-gray-400">Publicado recentemente</span>
         </div>
       </div>

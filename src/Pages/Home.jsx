@@ -61,6 +61,7 @@ export default function Home() {
               <PostCard
                 key={post.id}
                 id={post.id}
+                autorId={post.autorId || post.uid || post.userId} // 👈 Adicionado para disparar Notificações
                 author={post.autorNome || "Utilizador"}
                 content={post.conteudo}
                 likes={post.curtidas || []}

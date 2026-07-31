@@ -4,7 +4,8 @@ import { collection, getDocs, addDoc, serverTimestamp } from "firebase/firestore
 import { useNavigate } from "react-router-dom";
 import Navbar from "../Components/Navbar";
 import BottomNavigation from "../Components/BottomNavigation";
-import { FaSearch, FaUserPlus, FaComments } from "react-icons/fa";
+import SearchBar from "../Components/SearchBar"; // Importando o teu componente
+import { FaComments } from "react-icons/fa";
 
 export default function Search() {
   const currentUser = auth.currentUser;
@@ -28,7 +29,7 @@ export default function Search() {
         setUsuariosFiltrados(lista);
       } catch (error) {
         console.error("Erro ao carregar utilizadores para pesquisa:", error);
-      } font-medium {
+      } finally {
         setCarregando(false);
       }
     };
@@ -59,7 +60,6 @@ export default function Search() {
       const meuNome = currentUser.displayName || currentUser.email.split("@")[0];
       const outroNome = outroUsuario.nome || outroUsuario.email.split("@")[0];
 
-      // Verificar se já existe conversa ou criar uma nova
       await addDoc(collection(db, "chats"), {
         participantes: [currentUser.uid, outroUsuario.uid],
         nomesParticipantes: {
@@ -81,17 +81,12 @@ export default function Search() {
       <Navbar user={currentUser} />
 
       <main className="max-w-xl mx-auto pt-4 px-4 space-y-4">
-        {/* Campo de Pesquisa */}
-        <div className="bg-white p-3 rounded-2xl shadow-sm border flex items-center gap-3">
-          <FaSearch className="text-gray-400 ml-2" size={16} />
-          <input
-            type="text"
-            placeholder="Pesquisar por nome ou email..."
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            className="w-full text-xs sm:text-sm bg-transparent outline-none text-gray-800"
-          />
-        </div>
+        {/* Usando o Componente SearchBar aqui */}
+        <SearchBar 
+          value={busca} 
+          onChange={(e) => setBusca(e.target.value)} 
+          placeholder="Pesquisar por nome ou email..." 
+        />
 
         {/* Resultados da Pesquisa */}
         <div className="space-y-2">

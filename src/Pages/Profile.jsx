@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { auth, db, storage } from "../firebase";
 import { updateProfile } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
+import { collection, query, where, onSnapshot, orderBy, doc, updateDoc } from "firebase/firestore";
 import { FaCamera, FaUserEdit, FaArrowLeft } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import PostCard from "../Components/PostCard";
@@ -59,8 +59,13 @@ export default function Profile() {
       await uploadBytes(storageRef, file);
       const downloadURL = await getDownloadURL(storageRef);
 
-      // Atualizar no Firebase Auth
+      // 1. Atualizar no Firebase Auth
       await updateProfile(currentUser, { photoURL: downloadURL });
+
+      // 2. Atualizar no Firestore para sincronizar na Pesquisa/Comentários
+      const userDocRef = doc(db, "usuarios", currentUser.uid);
+      await updateDoc(userDocRef, { photoURL: downloadURL }).catch(() => {});
+
       setPhotoURL(downloadURL);
     } catch (error) {
       console.error("Erro ao atualizar foto de perfil:", error);
@@ -124,8 +129,11 @@ export default function Profile() {
                 </button>
               </div>
 
-              {/* Botão Editar Perfil */}
-              <button className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs px-3 py-2 rounded-lg transition border">
+              {/* Botão Editar Perfil (Navega para /edit-profile) */}
+              <button 
+                onClick={() => navigate("/edit-profile")}
+                className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs px-3 py-2 rounded-lg transition border"
+              >
                 <FaUserEdit size={14} />
                 Editar perfil
               </button>
