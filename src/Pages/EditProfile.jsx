@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 
-import { db } from "../firebase";
-import { useAuth } from "../context/AuthContext";
+import { db } from "../Firebase";
+import { useAuth } from "../Context/AuthContext";
 
 
 function EditProfile() {

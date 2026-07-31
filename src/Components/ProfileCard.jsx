@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { db, auth } from '../Firebase';
 
 export default function PostCard({ id, author, content, likes = [] }) {
   const currentUser = auth.currentUser;
