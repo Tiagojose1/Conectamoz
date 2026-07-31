@@ -11,7 +11,7 @@ import {
   onSnapshot, 
   serverTimestamp 
 } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { db, auth } from '../Firebase.js';
 
 export default function PostCard({ id, author, content, likes = [] }) {
   const currentUser = auth.currentUser;

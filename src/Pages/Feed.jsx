@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { db, auth } from "../firebase";
+import { db, auth } from "../Firebase.js";
 import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
 import CreatePost from "../Components/CreatePost";
 import PostCard from "../Components/PostCard";

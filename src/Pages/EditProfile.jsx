@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 
-import { db } from "../firebase";
+import { db } from "../Firebase.js";
 import { useAuth } from "../context/AuthContext";
 
 
