@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { db, auth } from "../firebase";
 import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
-import Navbar from "../Components/Navbar";
+
+// Componentes da Interface
 import BottomNavigation from "../Components/BottomNavigation";
 import CreatePost from "../Components/CreatePost";
+import Stories from "../Components/Stories";
 import PostCard from "../Components/PostCard";
 
 export default function Home() {
@@ -36,13 +38,14 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-100 pb-24">
-      <Navbar user={user} />
+      <main className="max-w-xl mx-auto px-2 sm:px-4">
+        {/* 1. Caixa de Criar Novo Post */}
+        <CreatePost user={user} />
 
-      <main className="max-w-xl mx-auto pt-4 px-4">
-        {/* Caixa de Criar Novo Post */}
-        <CreatePost />
+        {/* 2. Carrossel de Histórias (Stories) */}
+        <Stories />
 
-        {/* Lista de Publicações do Feed */}
+        {/* 3. Lista de Publicações do Feed */}
         {loading ? (
           <div className="text-center py-10 text-gray-500 font-medium animate-pulse">
             A carregar publicações...
