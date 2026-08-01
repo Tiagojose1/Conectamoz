@@ -1,82 +1,51 @@
-import React, { useState, useEffect } from "react";
-import { auth, db } from "../firebase";
-import { 
-  doc, 
-  updateDoc, 
-  arrayUnion, 
-  arrayRemove, 
-  collection, 
-  addDoc, 
-  query, 
-  orderBy, 
-  onSnapshot, 
-  serverTimestamp 
-} from "firebase/firestore";
-import { FaHeart, FaRegHeart, FaRegComment, FaPaperPlane } from "react-icons/fa";
-import { useNavigate } from "react-router-dom";
-import { enviarNotificacao } from "../utils/notifications";
+import React, { useState } from "react";
+import { db, auth } from "../firebase";
+import { doc, updateDoc, arrayUnion, arrayRemove, addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { FaThumbsUp, FaRegThumbsUp, FaComment, FaPaperPlane } from "react-icons/fa";
 
-export default function PostCard({ id, author, autorId, content, likes = [], imagemUrl, autorFoto }) {
-  const currentUser = auth.currentUser;
-  const navigate = useNavigate();
-  const isLiked = currentUser ? likes.includes(currentUser.uid) : false;
+export default function PostCard({
+  id,
+  autorId,
+  author,
+  content,
+  likes = [],
+  imagemUrl,
+  videoUrl,
+  autorFoto
+}) {
+  const user = auth.currentUser;
+  const isLiked = user ? likes.includes(user.uid) : false;
 
   const [mostrarComentarios, setMostrarComentarios] = useState(false);
   const [comentarios, setComentarios] = useState([]);
   const [novoComentario, setNovoComentario] = useState("");
-  const [enviandoComentario, setEnviandoComentario] = useState(false);
+  const [aCarregarComentario, setACarregarComentario] = useState(false);
 
-  // Escutar comentários do post em tempo real
-  useEffect(() => {
-    if (!mostrarComentarios) return;
-
-    const q = query(
-      collection(db, "posts", id, "comentarios"),
-      orderBy("criadoEm", "asc")
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const listaComentarios = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setComentarios(listaComentarios);
-    });
-
-    return () => unsubscribe();
-  }, [id, mostrarComentarios]);
-
-  // Abrir perfil do autor do post
-  const handleVerPerfil = () => {
-    if (autorId) {
-      navigate(`/profile/${autorId}`);
-    }
-  };
-
-  // Função para Curtir / Descurtir
+  // Função para dar/tirar Gosto e Enviar Notificação
   const handleLike = async () => {
-    if (!currentUser) return;
+    if (!user) return;
     const postRef = doc(db, "posts", id);
 
     try {
       if (isLiked) {
         await updateDoc(postRef, {
-          curtidas: arrayRemove(currentUser.uid),
+          curtidas: arrayRemove(user.uid)
         });
       } else {
         await updateDoc(postRef, {
-          curtidas: arrayUnion(currentUser.uid),
+          curtidas: arrayUnion(user.uid)
         });
 
-        // Disparar Notificação de Gosto 🔔
-        if (autorId) {
-          enviarNotificacao({
+        // Criar Notificação se não for o próprio autor do post
+        if (autorId && autorId !== user.uid) {
+          await addDoc(collection(db, "notificacoes"), {
             destinatarioId: autorId,
-            remetenteId: currentUser.uid,
-            remetenteNome: currentUser.displayName || currentUser.email.split("@")[0],
+            remetenteNome: user.displayName || user.email?.split("@")[0] || "Alguém",
+            remetenteFoto: user.photoURL || "",
             tipo: "like",
-            texto: "curtiu a tua publicação.",
-            link: "/"
+            postId: id,
+            lida: false,
+            criadoEm: serverTimestamp()
           });
         }
       }
@@ -86,169 +55,128 @@ export default function PostCard({ id, author, autorId, content, likes = [], ima
   };
 
   // Função para Adicionar Comentário
-  const handleAdicionarComentario = async (e) => {
+  const handleAddComment = async (e) => {
     e.preventDefault();
-    if (!novoComentario.trim() || !currentUser || enviandoComentario) return;
+    if (!novoComentario.trim() || !user) return;
 
+    setACarregarComentario(true);
     try {
-      setEnviandoComentario(true);
-      const meuNome = currentUser.displayName || currentUser.email.split("@")[0];
+      const comentarioObj = {
+        texto: novoComentario,
+        autorNome: user.displayName || user.email?.split("@")[0] || "Utilizador",
+        autorFoto: user.photoURL || "",
+        criadoEm: new Date().toISOString()
+      };
 
-      await addDoc(collection(db, "posts", id, "comentarios"), {
-        texto: novoComentario.trim(),
-        autorId: currentUser.uid,
-        autorNome: meuNome,
-        autorFoto: currentUser.photoURL || "",
-        criadoEm: serverTimestamp(),
+      const postRef = doc(db, "posts", id);
+      await updateDoc(postRef, {
+        comentarios: arrayUnion(comentarioObj)
       });
 
-      // Disparar Notificação de Comentário 🔔
-      if (autorId) {
-        enviarNotificacao({
+      setComentarios([...comentarios, comentarioObj]);
+      setNovoComentario("");
+
+      // Enviar Notificação de Comentário
+      if (autorId && autorId !== user.uid) {
+        await addDoc(collection(db, "notificacoes"), {
           destinatarioId: autorId,
-          remetenteId: currentUser.uid,
-          remetenteNome: meuNome,
+          remetenteNome: user.displayName || user.email?.split("@")[0] || "Alguém",
+          remetenteFoto: user.photoURL || "",
           tipo: "comment",
-          texto: "comentou na tua publicação.",
-          link: "/"
+          postId: id,
+          lida: false,
+          criadoEm: serverTimestamp()
         });
       }
-
-      setNovoComentario("");
     } catch (error) {
       console.error("Erro ao adicionar comentário:", error);
     } finally {
-      setEnviandoComentario(false);
+      setACarregarComentario(false);
     }
   };
 
-  const authorInitial = author ? author[0].toUpperCase() : "U";
-
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-4">
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-4 overflow-hidden">
       {/* Cabeçalho do Post */}
-      <div className="p-4 flex items-center gap-3">
-        <div onClick={handleVerPerfil} className="cursor-pointer">
-          {autorFoto ? (
-            <img
-              src={autorFoto}
-              alt={author}
-              className="w-10 h-10 rounded-full object-cover border"
-            />
-          ) : (
-            <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold">
-              {authorInitial}
-            </div>
-          )}
-        </div>
+      <div className="flex items-center gap-3 p-4 border-b border-gray-50">
+        {autorFoto ? (
+          <img src={autorFoto} alt={author} className="w-10 h-10 rounded-full object-cover border" />
+        ) : (
+          <div className="w-10 h-10 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center">
+            {author ? author[0].toUpperCase() : "U"}
+          </div>
+        )}
         <div>
-          <h3 
-            onClick={handleVerPerfil} 
-            className="font-bold text-gray-900 text-sm cursor-pointer hover:underline"
-          >
-            {author}
-          </h3>
-          <span className="text-xs text-gray-400">Publicado recentemente</span>
+          <h4 className="font-semibold text-gray-800 text-sm">{author}</h4>
+          <span className="text-[10px] text-gray-400">Publicado no ConectMoz</span>
         </div>
       </div>
 
       {/* Conteúdo de Texto */}
-      <div className="px-4 pb-3">
-        <p className="text-gray-800 text-sm whitespace-pre-line leading-relaxed">
+      {content && (
+        <p className="px-4 py-3 text-sm text-gray-700 whitespace-pre-line leading-relaxed">
           {content}
         </p>
-      </div>
+      )}
 
       {/* Imagem em Anexo */}
       {imagemUrl && (
-        <div className="w-full max-h-[450px] overflow-hidden bg-black flex items-center justify-center">
-          <img
-            src={imagemUrl}
-            alt="Anexo do Post"
-            className="w-full object-cover max-h-[450px]"
-          />
+        <div className="w-full bg-black/5 max-h-96 flex justify-center items-center overflow-hidden">
+          <img src={imagemUrl} alt="Publicação" className="w-full object-cover max-h-96" />
         </div>
       )}
 
-      {/* Contadores e Ações */}
-      <div className="px-4 py-2 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+      {/* Vídeo / Reels em Anexo */}
+      {videoUrl && (
+        <div className="w-full bg-black max-h-96 flex justify-center items-center">
+          <video src={videoUrl} controls className="w-full max-h-96" />
+        </div>
+      )}
+
+      {/* Contador de Reações */}
+      <div className="flex items-center justify-between px-4 py-2 border-t text-xs text-gray-500">
         <span>{likes.length} gostos</span>
-        <button 
-          onClick={() => setMostrarComentarios(!mostrarComentarios)} 
-          className="hover:underline"
-        >
-          {comentarios.length > 0 ? `${comentarios.length} comentários` : "Comentar"}
+        <button onClick={() => setMostrarComentarios(!mostrarComentarios)} className="hover:underline">
+          {comentarios.length} comentários
         </button>
       </div>
 
-      {/* Botões de Reação */}
-      <div className="px-2 py-1 border-t border-gray-100 flex items-center justify-around">
+      {/* Botoes de Ação */}
+      <div className="flex border-t border-b border-gray-100 text-gray-600 font-medium text-xs">
         <button
           onClick={handleLike}
-          className={`flex items-center gap-2 py-2 px-4 rounded-lg text-sm font-semibold transition ${
-            isLiked ? "text-red-500" : "text-gray-600 hover:bg-gray-100"
+          className={`flex-1 py-2.5 flex items-center justify-center gap-2 hover:bg-gray-50 transition ${
+            isLiked ? "text-blue-600 font-bold" : ""
           }`}
         >
-          {isLiked ? <FaHeart size={18} /> : <FaRegHeart size={18} />}
+          {isLiked ? <FaThumbsUp size={16} /> : <FaRegThumbsUp size={16} />}
           <span>Gosto</span>
         </button>
 
         <button
           onClick={() => setMostrarComentarios(!mostrarComentarios)}
-          className="flex items-center gap-2 py-2 px-4 rounded-lg text-sm font-semibold text-gray-600 hover:bg-gray-100 transition"
+          className="flex-1 py-2.5 flex items-center justify-center gap-2 hover:bg-gray-50 transition"
         >
-          <FaRegComment size={18} />
+          <FaComment size={16} />
           <span>Comentar</span>
         </button>
       </div>
 
-      {/* Secção de Comentários */}
+      {/* Caixa de Comentários */}
       {mostrarComentarios && (
-        <div className="bg-gray-50 border-t border-gray-200 p-4 space-y-3">
-          {/* Lista de Comentários */}
-          <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-            {comentarios.length === 0 ? (
-              <p className="text-xs text-gray-400 text-center py-2">
-                Sê o primeiro a comentar!
-              </p>
-            ) : (
-              comentarios.map((c) => (
-                <div key={c.id} className="flex gap-2 items-start text-xs">
-                  {c.autorFoto ? (
-                    <img
-                      src={c.autorFoto}
-                      alt={c.autorNome}
-                      className="w-6 h-6 rounded-full object-cover border mt-1"
-                    />
-                  ) : (
-                    <div className="w-6 h-6 rounded-full bg-gray-400 text-white flex items-center justify-center font-bold text-[10px] mt-1">
-                      {c.autorNome ? c.autorNome[0].toUpperCase() : "U"}
-                    </div>
-                  )}
-                  <div className="bg-white p-2 rounded-xl border border-gray-200 flex-1">
-                    <span className="font-bold text-gray-800 block">
-                      {c.autorNome}
-                    </span>
-                    <p className="text-gray-700 mt-0.5">{c.texto}</p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* Campo para Escrever Comentário */}
-          <form onSubmit={handleAdicionarComentario} className="flex items-center gap-2 pt-2 border-t">
+        <div className="p-4 bg-gray-50 space-y-3">
+          <form onSubmit={handleAddComment} className="flex gap-2">
             <input
               type="text"
               placeholder="Escreve um comentário..."
               value={novoComentario}
               onChange={(e) => setNovoComentario(e.target.value)}
-              className="flex-1 bg-white border border-gray-300 text-xs rounded-full px-3 py-2 outline-none focus:border-blue-500"
+              className="flex-1 bg-white border border-gray-300 rounded-full px-3 py-1.5 text-xs outline-none focus:border-blue-500"
             />
             <button
               type="submit"
-              disabled={!novoComentario.trim() || enviandoComentario}
-              className="bg-blue-600 hover:bg-blue-700 text-white p-2 rounded-full disabled:opacity-40 transition"
+              disabled={aCarregarComentario || !novoComentario.trim()}
+              className="bg-blue-600 text-white p-2 rounded-full disabled:opacity-50"
             >
               <FaPaperPlane size={12} />
             </button>
