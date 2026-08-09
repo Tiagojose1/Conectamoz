@@ -1,20 +1,22 @@
 import React, { useState, useEffect } from "react";
-import { db, auth } from "../firebase";
+import { db, auth } from "../firebase/config"; // Caminho padronizado
 import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
 
 // Componentes da Interface
 import BottomNavigation from "../Components/BottomNavigation";
 import CreatePost from "../Components/CreatePost";
-import Stories from "../Components/Stories";
+import StoriesBar from "../Components/StoriesBar"; // Atualizado para usar StoriesBar
+import ReelsFeed from "../Components/ReelsFeed";
 import PostCard from "../Components/PostCard";
 
 export default function Home() {
+  const [activeTab, setActiveTab] = useState("feed"); // 'feed' ou 'reels'
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const user = auth.currentUser;
 
   useEffect(() => {
-    // Busca todas as publicações do Firestore em tempo real
+    // Busca publicações do feed em tempo real
     const q = query(collection(db, "posts"), orderBy("criadoEm", "desc"));
 
     const unsubscribe = onSnapshot(
@@ -38,40 +40,73 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-100 pb-24">
-      <main className="max-w-xl mx-auto px-2 sm:px-4">
-        {/* 1. Caixa de Criar Novo Post */}
-        <CreatePost user={user} />
+      {/* Barra de Seleção de Aba Superior */}
+      <div className="bg-white border-b sticky top-0 z-20 flex justify-center gap-8 py-3 font-semibold text-sm">
+        <button
+          onClick={() => setActiveTab("feed")}
+          className={`pb-1 border-b-2 ${
+            activeTab === "feed"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-gray-500 hover:text-black"
+          }`}
+        >
+          Feed Principal
+        </button>
+        <button
+          onClick={() => setActiveTab("reels")}
+          className={`pb-1 border-b-2 ${
+            activeTab === "reels"
+              ? "border-blue-600 text-blue-600"
+              : "border-transparent text-gray-500 hover:text-black"
+          }`}
+        >
+          Reels
+        </button>
+      </div>
 
-        {/* 2. Carrossel de Histórias (Stories) */}
-        <Stories />
+      {activeTab === "feed" ? (
+        <main className="max-w-xl mx-auto px-2 sm:px-4 mt-2">
+          {/* 1. Caixa de Criar Novo Post */}
+          <CreatePost user={user} />
 
-        {/* 3. Lista de Publicações do Feed */}
-        {loading ? (
-          <div className="text-center py-10 text-gray-500 font-medium animate-pulse">
-            A carregar publicações...
-          </div>
-        ) : posts.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-xl border text-gray-500">
-            <p className="font-semibold text-gray-700">Nenhuma publicação ainda.</p>
-            <p className="text-xs text-gray-400 mt-1">Seja o primeiro a publicar algo no ConectMoz!</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {posts.map((post) => (
-              <PostCard
-                key={post.id}
-                id={post.id}
-                autorId={post.autorId || post.uid || post.userId} // 👈 Adicionado para disparar Notificações
-                author={post.autorNome || "Utilizador"}
-                content={post.conteudo}
-                likes={post.curtidas || []}
-                imagemUrl={post.imagemUrl}
-                autorFoto={post.autorFoto}
-              />
-            ))}
-          </div>
-        )}
-      </main>
+          {/* 2. Barra de Histórias */}
+          <StoriesBar onOpenAddStory={() => alert("Abrir modal de novo Story")} />
+
+          {/* 3. Lista de Publicações do Feed */}
+          {loading ? (
+            <div className="text-center py-10 text-gray-500 font-medium animate-pulse">
+              A carregar publicações...
+            </div>
+          ) : posts.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-xl border text-gray-500 mt-4">
+              <p className="font-semibold text-gray-700">Nenhuma publicação ainda.</p>
+              <p className="text-xs text-gray-400 mt-1">
+                Seja o primeiro a publicar algo no ConectMoz!
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4 mt-4">
+              {posts.map((post) => (
+                <PostCard
+                  key={post.id}
+                  id={post.id}
+                  autorId={post.autorId || post.uid || post.userId}
+                  author={post.autorNome || "Utilizador"}
+                  content={post.conteudo}
+                  likes={post.curtidas || []}
+                  imagemUrl={post.imagemUrl}
+                  autorFoto={post.autorFoto}
+                />
+              ))}
+            </div>
+          )}
+        </main>
+      ) : (
+        /* Renderiza o Feed de Reels em ecrã/aba própria */
+        <main className="pt-2">
+          <ReelsFeed />
+        </main>
+      )}
 
       <BottomNavigation />
     </div>

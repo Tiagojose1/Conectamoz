@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { db, auth } from "../firebase";
 import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
+
+// Componentes da Interface
 import CreatePost from "../Components/CreatePost";
+import StoriesBar from "../Components/StoriesBar";
 import PostCard from "../Components/PostCard";
 
-export default function Feed() {
+export default function Feed({ onOpenAddStory, onSelectStory }) {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const user = auth.currentUser;
 
   useEffect(() => {
     // Escuta as publicações em tempo real ordenadas pela data de criação
@@ -41,10 +45,16 @@ export default function Feed() {
 
   return (
     <div className="space-y-4 max-w-xl mx-auto w-full">
-      {/* Caixa para criar novas publicações */}
-      <CreatePost />
+      {/* 1. Barra de Histórias no Topo */}
+      <StoriesBar 
+        onOpenAddStory={onOpenAddStory} 
+        onSelectStory={onSelectStory} 
+      />
 
-      {/* Lista de publicações */}
+      {/* 2. Caixa para criar novas publicações */}
+      <CreatePost user={user} />
+
+      {/* 3. Lista de publicações */}
       {posts.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border text-gray-500 shadow-sm">
           <p className="font-semibold text-gray-700">Nenhuma publicação ainda.</p>
@@ -57,9 +67,12 @@ export default function Feed() {
           <PostCard
             key={post.id}
             id={post.id}
+            autorId={post.autorId || post.uid || post.userId}
             author={post.autorNome || "Utilizador"}
             content={post.conteudo}
             likes={post.curtidas || []}
+            imagemUrl={post.imagemUrl}
+            autorFoto={post.autorFoto}
           />
         ))
       )}
