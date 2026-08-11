@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from "react";
-import { db, auth } from "../firebase/config"; // Caminho padronizado
+import { db, auth } from "../firebase"; // Corrigido de "../firebase/config" para "../firebase"
 import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
 
 // Componentes da Interface
 import BottomNavigation from "../Components/BottomNavigation";
 import CreatePost from "../Components/CreatePost";
-import StoriesBar from "../Components/StoriesBar"; // Atualizado para usar StoriesBar
+import StoriesBar from "../Components/StoriesBar";
 import ReelsFeed from "../Components/ReelsFeed";
 import PostCard from "../Components/PostCard";
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState("feed"); // 'feed' ou 'reels'
+  const [activeTab, setActiveTab] = useState("feed");
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const user = auth.currentUser;
