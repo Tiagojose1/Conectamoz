@@ -2,15 +2,13 @@ import React, { useState } from "react";
 import { db, auth, storage } from "../firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { FaTimes, FaImage, FaVideo, FaSpinner } from "react-icons/fa";
+import { FaImage, FaVideo, FaSpinner, FaTrash } from "react-icons/fa";
 
-export default function CreatePostModal({ isOpen, onClose }) {
+export default function CreatePost({ onPostCreated }) {
   const [conteudo, setConteudo] = useState("");
   const [mediaFile, setMediaFile] = useState(null);
   const [mediaType, setMediaType] = useState(null); // "image" ou "video"
   const [loading, setLoading] = useState(false);
-
-  if (!isOpen) return null;
 
   const user = auth.currentUser;
 
@@ -22,6 +20,11 @@ export default function CreatePostModal({ isOpen, onClose }) {
     }
   };
 
+  const handleRemoveMedia = () => {
+    setMediaFile(null);
+    setMediaType(null);
+  };
+
   const handlePublish = async (e) => {
     e.preventDefault();
     if (!conteudo.trim() && !mediaFile) return;
@@ -31,22 +34,23 @@ export default function CreatePostModal({ isOpen, onClose }) {
     try {
       let mediaUrl = "";
 
-      // Upload do ficheiro (Foto ou Vídeo) para o Firebase Storage se existir
+      // Upload da Imagem ou Vídeo no Firebase Storage
       if (mediaFile && user) {
+        const folder = mediaType === "video" ? "videos" : "images";
         const fileRef = ref(
           storage,
-          `posts/${user.uid}/${Date.now()}_${mediaFile.name}`
+          `posts/${folder}/${user.uid}_${Date.now()}_${mediaFile.name}`
         );
         await uploadBytes(fileRef, mediaFile);
         mediaUrl = await getDownloadURL(fileRef);
       }
 
-      // Salvar a publicação no Firestore
+      // Guardar a publicação no Firestore com imagemUrl e videoUrl
       await addDoc(collection(db, "posts"), {
         autorId: user?.uid || "",
         autorNome: user?.displayName || user?.email?.split("@")[0] || "Utilizador",
         autorFoto: user?.photoURL || "",
-        conteudo: conteudo,
+        conteudo: conteudo.trim(),
         imagemUrl: mediaType === "image" ? mediaUrl : "",
         videoUrl: mediaType === "video" ? mediaUrl : "",
         curtidas: [],
@@ -54,12 +58,13 @@ export default function CreatePostModal({ isOpen, onClose }) {
         criadoEm: serverTimestamp(),
       });
 
-      // Limpar campos e fechar o modal
+      // Limpar campos
       setConteudo("");
       setMediaFile(null);
       setMediaType(null);
       setLoading(false);
-      onClose();
+
+      if (onPostCreated) onPostCreated();
     } catch (error) {
       console.error("Erro ao publicar:", error);
       alert("Erro ao criar publicação. Tenta novamente!");
@@ -67,105 +72,110 @@ export default function CreatePostModal({ isOpen, onClose }) {
     }
   };
 
+  const userInitial = user?.displayName
+    ? user.displayName[0].toUpperCase()
+    : user?.email
+    ? user.email[0].toUpperCase()
+    : "U";
+
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl overflow-hidden animate-fade-in">
-        
-        {/* Cabeçalho do Modal */}
-        <div className="flex items-center justify-between px-4 py-3 border-b">
-          <h2 className="font-bold text-gray-800 text-base">Criar Publicação</h2>
-          <button 
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100"
+    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 mb-6">
+      {/* Cabeçalho / Perfil */}
+      <div className="flex items-start gap-3 mb-3">
+        {user?.photoURL ? (
+          <img
+            src={user.photoURL}
+            alt="Perfil"
+            className="w-10 h-10 rounded-full object-cover border"
+          />
+        ) : (
+          <div className="w-10 h-10 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center">
+            {userInitial}
+          </div>
+        )}
+
+        <textarea
+          rows="2"
+          disabled={loading}
+          className="flex-1 text-sm text-gray-800 placeholder-gray-400 border-none outline-none resize-none pt-2"
+          placeholder={`Em que estás a pensar, ${user?.displayName || "amigo"}?`}
+          value={conteudo}
+          onChange={(e) => setConteudo(e.target.value)}
+        />
+      </div>
+
+      {/* Pré-visualização da Mídia selecionada */}
+      {mediaFile && (
+        <div className="relative mb-3 rounded-xl overflow-hidden border border-gray-200 bg-black/5 max-h-60 flex justify-center items-center">
+          {mediaType === "image" ? (
+            <img
+              src={URL.createObjectURL(mediaFile)}
+              alt="Pré-visualização"
+              className="max-h-60 object-contain w-full"
+            />
+          ) : (
+            <video
+              src={URL.createObjectURL(mediaFile)}
+              controls
+              className="max-h-60 w-full"
+            />
+          )}
+          <button
+            type="button"
+            onClick={handleRemoveMedia}
+            className="absolute top-2 right-2 bg-black/70 hover:bg-black text-white p-2 rounded-full transition"
           >
-            <FaTimes size={18} />
+            <FaTrash size={12} />
           </button>
         </div>
+      )}
 
-        {/* Formulário */}
-        <form onSubmit={handlePublish} className="p-4 space-y-4">
-          <textarea
-            value={conteudo}
-            onChange={(e) => setConteudo(e.target.value)}
-            placeholder={`Em que estás a pensar, ${user?.displayName || "amigo"}?`}
-            className="w-full min-h-[120px] p-2 outline-none text-gray-800 text-sm resize-none"
-            disabled={loading}
-          />
+      {/* Opções e Botão de Envio */}
+      <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+        <div className="flex items-center gap-2">
+          {/* Botão para carregar Imagem */}
+          <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-gray-600 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition">
+            <FaImage size={18} className="text-green-500" />
+            <span>Foto</span>
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => handleFileChange(e, "image")}
+              disabled={loading}
+            />
+          </label>
 
-          {/* Pré-visualização de Mídia anexada */}
-          {mediaFile && (
-            <div className="relative rounded-xl overflow-hidden border bg-gray-50 max-h-48 flex justify-center items-center">
-              {mediaType === "image" ? (
-                <img 
-                  src={URL.createObjectURL(mediaFile)} 
-                  alt="Pré-visualização" 
-                  className="max-h-48 object-contain"
-                />
-              ) : (
-                <video 
-                  src={URL.createObjectURL(mediaFile)} 
-                  controls 
-                  className="max-h-48"
-                />
-              )}
-              <button
-                type="button"
-                onClick={() => { setMediaFile(null); setMediaType(null); }}
-                className="absolute top-2 right-2 bg-black/70 text-white rounded-full p-1.5 hover:bg-black"
-              >
-                <FaTimes size={12} />
-              </button>
-            </div>
+          {/* Botão para carregar Vídeo */}
+          <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-gray-600 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition">
+            <FaVideo size={18} className="text-purple-500" />
+            <span>Vídeo</span>
+            <input
+              type="file"
+              accept="video/*"
+              className="hidden"
+              onChange={(e) => handleFileChange(e, "video")}
+              disabled={loading}
+            />
+          </label>
+        </div>
+
+        {/* Botão Publicar */}
+        <button
+          type="button"
+          onClick={handlePublish}
+          disabled={loading || (!conteudo.trim() && !mediaFile)}
+          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded-xl transition flex items-center gap-2"
+        >
+          {loading ? (
+            <>
+              <FaSpinner className="animate-spin" />
+              <span>A publicar...</span>
+            </>
+          ) : (
+            "Publicar"
           )}
-
-          {/* Opções de Anexo */}
-          <div className="flex items-center justify-between border rounded-xl p-3 bg-gray-50">
-            <span className="text-xs font-semibold text-gray-600">Adicionar à publicação:</span>
-            
-            <div className="flex items-center gap-2">
-              {/* Carregar Foto */}
-              <label className="cursor-pointer text-green-600 hover:bg-green-50 p-2 rounded-full transition">
-                <FaImage size={20} />
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  className="hidden" 
-                  onChange={(e) => handleFileChange(e, "image")}
-                  disabled={loading}
-                />
-              </label>
-
-              {/* Carregar Vídeo / Reels */}
-              <label className="cursor-pointer text-purple-600 hover:bg-purple-50 p-2 rounded-full transition">
-                <FaVideo size={20} />
-                <input 
-                  type="file" 
-                  accept="video/*" 
-                  className="hidden" 
-                  onChange={(e) => handleFileChange(e, "video")}
-                  disabled={loading}
-                />
-              </label>
-            </div>
-          </div>
-
-          {/* Botão de Submeter */}
-          <button
-            type="submit"
-            disabled={loading || (!conteudo.trim() && !mediaFile)}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white font-semibold py-2.5 rounded-xl transition flex items-center justify-center gap-2 text-sm"
-          >
-            {loading ? (
-              <>
-                <FaSpinner className="animate-spin" />
-                <span>A publicar...</span>
-              </>
-            ) : (
-              "Publicar"
-            )}
-          </button>
-        </form>
-
+        </button>
       </div>
     </div>
   );

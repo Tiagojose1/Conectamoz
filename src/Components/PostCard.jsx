@@ -9,6 +9,7 @@ export default function PostCard({
   author,
   content,
   likes = [],
+  comentarios = [],
   imagemUrl,
   videoUrl,
   autorFoto
@@ -17,7 +18,7 @@ export default function PostCard({
   const isLiked = user ? likes.includes(user.uid) : false;
 
   const [mostrarComentarios, setMostrarComentarios] = useState(false);
-  const [comentarios, setComentarios] = useState([]);
+  const [listaComentarios, setListaComentarios] = useState(comentarios);
   const [novoComentario, setNovoComentario] = useState("");
   const [aCarregarComentario, setACarregarComentario] = useState(false);
 
@@ -73,7 +74,7 @@ export default function PostCard({
         comentarios: arrayUnion(comentarioObj)
       });
 
-      setComentarios([...comentarios, comentarioObj]);
+      setListaComentarios([...listaComentarios, comentarioObj]);
       setNovoComentario("");
 
       // Enviar Notificação de Comentário
@@ -137,11 +138,11 @@ export default function PostCard({
       <div className="flex items-center justify-between px-4 py-2 border-t text-xs text-gray-500">
         <span>{likes.length} gostos</span>
         <button onClick={() => setMostrarComentarios(!mostrarComentarios)} className="hover:underline">
-          {comentarios.length} comentários
+          {listaComentarios.length} comentários
         </button>
       </div>
 
-      {/* Botoes de Ação */}
+      {/* Botões de Ação */}
       <div className="flex border-t border-b border-gray-100 text-gray-600 font-medium text-xs">
         <button
           onClick={handleLike}
@@ -165,6 +166,22 @@ export default function PostCard({
       {/* Caixa de Comentários */}
       {mostrarComentarios && (
         <div className="p-4 bg-gray-50 space-y-3">
+          {/* Lista de Comentários já feitos */}
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {listaComentarios.map((c, index) => (
+              <div key={index} className="flex items-start gap-2 text-xs">
+                <div className="w-6 h-6 rounded-full bg-gray-300 text-gray-700 font-bold flex items-center justify-center text-[10px]">
+                  {c.autorNome ? c.autorNome[0].toUpperCase() : "U"}
+                </div>
+                <div className="bg-white p-2 rounded-xl border flex-1">
+                  <span className="font-semibold block text-gray-800">{c.autorNome}</span>
+                  <span className="text-gray-600">{c.texto}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Form para novo comentário */}
           <form onSubmit={handleAddComment} className="flex gap-2">
             <input
               type="text"
