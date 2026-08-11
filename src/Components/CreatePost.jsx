@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { db, auth, storage } from "../firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { FaImage, FaVideo, FaSpinner, FaTrash } from "react-icons/fa";
 
 export default function CreatePost({ onPostCreated }) {
@@ -9,12 +9,18 @@ export default function CreatePost({ onPostCreated }) {
   const [mediaFile, setMediaFile] = useState(null);
   const [mediaType, setMediaType] = useState(null); // "image" ou "video"
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const user = auth.currentUser;
 
   const handleFileChange = (e, type) => {
     const file = e.target.files[0];
     if (file) {
+      // Limite opcional: Avisar se o vídeo for maior que 50MB
+      if (type === "video" && file.size > 50 * 1024 * 1024) {
+        alert("O vídeo é muito grande! Escolha um vídeo menor que 50MB.");
+        return;
+      }
       setMediaFile(file);
       setMediaType(type);
     }
@@ -23,33 +29,59 @@ export default function CreatePost({ onPostCreated }) {
   const handleRemoveMedia = () => {
     setMediaFile(null);
     setMediaType(null);
+    setUploadProgress(0);
   };
 
   const handlePublish = async (e) => {
     e.preventDefault();
     if (!conteudo.trim() && !mediaFile) return;
 
+    if (!user) {
+      alert("Precisas de ter a sessão iniciada para publicar!");
+      return;
+    }
+
     setLoading(true);
+    setUploadProgress(0);
 
     try {
       let mediaUrl = "";
 
-      // Upload da Imagem ou Vídeo no Firebase Storage
-      if (mediaFile && user) {
+      if (mediaFile) {
         const folder = mediaType === "video" ? "videos" : "images";
-        const fileRef = ref(
-          storage,
-          `posts/${folder}/${user.uid}_${Date.now()}_${mediaFile.name}`
-        );
-        await uploadBytes(fileRef, mediaFile);
-        mediaUrl = await getDownloadURL(fileRef);
+        const fileName = `posts/${folder}/${user.uid}_${Date.now()}_${mediaFile.name}`;
+        const storageRef = ref(storage, fileName);
+
+        // Upload com progresso (Resumable Upload)
+        const uploadTask = uploadBytesResumable(storageRef, mediaFile);
+
+        await new Promise((resolve, reject) => {
+          uploadTask.on(
+            "state_changed",
+            (snapshot) => {
+              const progress = Math.round(
+                (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+              );
+              setUploadProgress(progress);
+              console.log(`Upload está a ${progress}%`);
+            },
+            (error) => {
+              console.error("Erro no Upload do Firebase Storage:", error);
+              reject(error);
+            },
+            async () => {
+              mediaUrl = await getDownloadURL(uploadTask.snapshot.ref);
+              resolve();
+            }
+          );
+        });
       }
 
-      // Guardar a publicação no Firestore com imagemUrl e videoUrl
+      // Guardar a publicação no Firestore
       await addDoc(collection(db, "posts"), {
-        autorId: user?.uid || "",
-        autorNome: user?.displayName || user?.email?.split("@")[0] || "Utilizador",
-        autorFoto: user?.photoURL || "",
+        autorId: user.uid,
+        autorNome: user.displayName || user.email?.split("@")[0] || "Utilizador",
+        autorFoto: user.photoURL || "",
         conteudo: conteudo.trim(),
         imagemUrl: mediaType === "image" ? mediaUrl : "",
         videoUrl: mediaType === "video" ? mediaUrl : "",
@@ -58,16 +90,17 @@ export default function CreatePost({ onPostCreated }) {
         criadoEm: serverTimestamp(),
       });
 
-      // Limpar campos
+      // Limpar formulário
       setConteudo("");
       setMediaFile(null);
       setMediaType(null);
       setLoading(false);
+      setUploadProgress(0);
 
       if (onPostCreated) onPostCreated();
     } catch (error) {
-      console.error("Erro ao publicar:", error);
-      alert("Erro ao criar publicação. Tenta novamente!");
+      console.error("Erro detalhado ao publicar:", error);
+      alert(`Falha ao publicar: ${error.message || "Verifique a ligação ou as permissões do Firebase."}`);
       setLoading(false);
     }
   };
@@ -80,7 +113,6 @@ export default function CreatePost({ onPostCreated }) {
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-4 mb-6">
-      {/* Cabeçalho / Perfil */}
       <div className="flex items-start gap-3 mb-3">
         {user?.photoURL ? (
           <img
@@ -104,7 +136,7 @@ export default function CreatePost({ onPostCreated }) {
         />
       </div>
 
-      {/* Pré-visualização da Mídia selecionada */}
+      {/* Pré-visualização da Mídia */}
       {mediaFile && (
         <div className="relative mb-3 rounded-xl overflow-hidden border border-gray-200 bg-black/5 max-h-60 flex justify-center items-center">
           {mediaType === "image" ? (
@@ -123,6 +155,7 @@ export default function CreatePost({ onPostCreated }) {
           <button
             type="button"
             onClick={handleRemoveMedia}
+            disabled={loading}
             className="absolute top-2 right-2 bg-black/70 hover:bg-black text-white p-2 rounded-full transition"
           >
             <FaTrash size={12} />
@@ -133,7 +166,7 @@ export default function CreatePost({ onPostCreated }) {
       {/* Opções e Botão de Envio */}
       <div className="flex items-center justify-between pt-3 border-t border-gray-100">
         <div className="flex items-center gap-2">
-          {/* Botão para carregar Imagem */}
+          {/* Foto */}
           <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-gray-600 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition">
             <FaImage size={18} className="text-green-500" />
             <span>Foto</span>
@@ -146,7 +179,7 @@ export default function CreatePost({ onPostCreated }) {
             />
           </label>
 
-          {/* Botão para carregar Vídeo */}
+          {/* Vídeo */}
           <label className="flex items-center gap-1.5 cursor-pointer text-xs font-semibold text-gray-600 hover:bg-gray-100 px-3 py-1.5 rounded-lg transition">
             <FaVideo size={18} className="text-purple-500" />
             <span>Vídeo</span>
@@ -170,7 +203,7 @@ export default function CreatePost({ onPostCreated }) {
           {loading ? (
             <>
               <FaSpinner className="animate-spin" />
-              <span>A publicar...</span>
+              <span>{uploadProgress > 0 ? `${uploadProgress}%` : "A publicar..."}</span>
             </>
           ) : (
             "Publicar"
