@@ -1,181 +1,272 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { auth, db } from "../firebase";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { 
-  FaSearch, 
   FaHome, 
   FaTv, 
-  FaUserFriends, 
+  FaUsers, 
   FaBriefcase, 
-  FaBell, 
-  FaFacebookMessenger, 
-  FaBars 
+  FaPlus, 
+  FaSearch, 
+  FaComments, 
+  FaBars, 
+  FaTimes,
+  FaEdit,
+  FaHistory,
+  FaVideo,
+  FaBookmark,
+  FaCog,
+  FaQuestionCircle,
+  FaUser,
+  FaSignOutAlt,
+  FaStickyNote
 } from "react-icons/fa";
+import { auth } from "../firebase";
+import { signOut } from "firebase/auth";
 
 export default function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const currentUser = auth.currentUser;
 
-  const [notifNaoLidas, setNotifNaoLidas] = useState(0);
-  const [termoPesquisa, setTermoPesquisa] = useState("");
+  // Estados para abrir/fechar menus
+  const [showCreateMenu, setShowCreateMenu] = useState(false);
+  const [showSidebarMenu, setShowSidebarMenu] = useState(false);
 
-  // Escutar notificações não lidas no Firestore
-  useEffect(() => {
-    if (!currentUser) return;
+  const user = auth.currentUser;
 
-    const q = query(
-      collection(db, "notificacoes"),
-      where("destinatarioId", "==", currentUser.uid),
-      where("lida", "==", false)
-    );
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setNotifNaoLidas(snapshot.docs.length);
-    }, (error) => {
-      console.error("Erro ao escutar contagem de notificações:", error);
-    });
-
-    return () => unsubscribe();
-  }, [currentUser]);
-
-  // Função para processar a pesquisa
-  const handlePesquisa = (e) => {
-    if (e.key === "Enter" && termoPesquisa.trim()) {
-      navigate(`/search?q=${encodeURIComponent(termoPesquisa.trim())}`);
-    }
+  const handleLogout = async () => {
+    await signOut(auth);
+    navigate("/login");
   };
 
-  const isActive = (path) => location.pathname === path;
-
   return (
-    <header className="fixed top-0 left-0 w-full bg-white shadow-sm z-50 border-b border-gray-200">
-      {/* Linha Superior: Logo, Pesquisa e Atalhos */}
-      <div className="flex items-center justify-between px-4 py-2">
-        {/* Lado Esquerdo: Logo + Barra de Pesquisa */}
-        <div className="flex items-center gap-2">
+    <header className="fixed top-0 left-0 right-0 bg-white border-b border-gray-200 z-50 shadow-sm">
+      {/* LINHA SUPERIOR */}
+      <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+        
+        {/* Lado Esquerdo: Logo + Ícone Criar (+) */}
+        <div className="flex items-center gap-3">
           <h1 
             onClick={() => navigate("/home")} 
-            className="text-blue-600 text-2xl font-bold tracking-tight cursor-pointer select-none"
+            className="text-2xl font-bold text-blue-600 tracking-tight cursor-pointer"
           >
             conectamoz
           </h1>
-          <div className="flex items-center bg-gray-100 rounded-full px-3 py-1.5 text-gray-500 text-sm">
-            <FaSearch 
-              className="mr-2 text-gray-400 cursor-pointer" 
-              onClick={() => navigate("/search")}
-            />
-            <input 
-              type="text" 
-              placeholder="Pesquisar no Conectamoz" 
-              value={termoPesquisa}
-              onChange={(e) => setTermoPesquisa(e.target.value)}
-              onKeyDown={handlePesquisa}
-              className="bg-transparent outline-none w-32 sm:w-48 placeholder-gray-500 text-xs sm:text-sm text-gray-800"
-            />
+
+          {/* Botão de Adicionar (+) - Foto 2 */}
+          <div className="relative">
+            <button
+              onClick={() => {
+                setShowCreateMenu(!showCreateMenu);
+                setShowSidebarMenu(false);
+              }}
+              className="w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-800 transition"
+              title="Criar"
+            >
+              <FaPlus size={16} />
+            </button>
+
+            {/* Menu Suspenso de Criação (Foto 2) */}
+            {showCreateMenu && (
+              <div className="absolute left-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50">
+                <button 
+                  onClick={() => setShowCreateMenu(false)}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 text-sm font-semibold text-gray-700 hover:bg-gray-100 transition"
+                >
+                  <FaEdit size={18} className="text-gray-700" /> Publicação
+                </button>
+                <button 
+                  onClick={() => setShowCreateMenu(false)}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 text-sm font-semibold text-gray-700 hover:bg-gray-100 transition"
+                >
+                  <FaHistory size={18} className="text-gray-700" /> História
+                </button>
+                <button 
+                  onClick={() => setShowCreateMenu(false)}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 text-sm font-semibold text-gray-700 hover:bg-gray-100 transition"
+                >
+                  <FaVideo size={18} className="text-gray-700" /> Reel
+                </button>
+                <button 
+                  onClick={() => setShowCreateMenu(false)}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 text-sm font-semibold text-gray-700 hover:bg-gray-100 transition"
+                >
+                  <FaVideo size={18} className="text-gray-700" /> Direto
+                </button>
+                <button 
+                  onClick={() => setShowCreateMenu(false)}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 text-sm font-semibold text-gray-700 hover:bg-gray-100 transition"
+                >
+                  <FaStickyNote size={18} className="text-gray-700" /> Nota
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Lado Direito: Ícones Rápidos */}
+        {/* Lado Direito: Pesquisa, Mensagens, Menu 3 Traços */}
         <div className="flex items-center gap-2">
+          {/* Lupa / Pesquisar */}
+          <button 
+            onClick={() => navigate("/search")}
+            className="w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-800 transition"
+          >
+            <FaSearch size={16} />
+          </button>
+
           {/* Mensagens / Chat */}
           <button 
             onClick={() => navigate("/chat")}
-            className="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-700 relative transition"
-            title="Mensagens"
+            className="w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-800 transition relative"
           >
-            <FaFacebookMessenger size={18} />
+            <FaComments size={16} />
           </button>
 
-          {/* Notificações */}
+          {/* Menu Três Traços (Foto 3) */}
           <button 
-            onClick={() => navigate("/notifications")}
-            className="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-700 relative transition"
-            title="Notificações"
+            onClick={() => {
+              setShowSidebarMenu(!showSidebarMenu);
+              setShowCreateMenu(false);
+            }}
+            className="w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-800 transition"
           >
-            <FaBell size={18} />
-            {notifNaoLidas > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse">
-                {notifNaoLidas > 9 ? "9+" : notifNaoLidas}
-              </span>
-            )}
-          </button>
-
-          {/* Menu / Perfil */}
-          <button 
-            onClick={() => navigate("/profile")}
-            className="w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-700 transition"
-            title="Perfil"
-          >
-            <FaBars size={18} />
+            {showSidebarMenu ? <FaTimes size={18} /> : <FaBars size={18} />}
           </button>
         </div>
       </div>
 
-      {/* Linha Inferior: Abas Principais (Tabs) */}
-      <nav className="flex justify-around items-center border-t border-gray-100 text-gray-500">
-        {/* Feed / Home */}
-        <button 
+      {/* LINHA INFERIOR: NAVEGAÇÃO POR SEPARADORES (ESTILO FACEBOOK) */}
+      <div className="flex justify-around items-center border-t border-gray-100 max-w-2xl mx-auto">
+        <button
           onClick={() => navigate("/home")}
-          className={`flex-1 flex justify-center py-2.5 transition ${
-            isActive("/home") 
-              ? "text-blue-600 border-b-4 border-blue-600" 
-              : "hover:bg-gray-50 text-gray-500"
+          className={`flex-1 py-2.5 flex justify-center items-center border-b-2 transition ${
+            location.pathname === "/home" || location.pathname === "/" 
+              ? "border-blue-600 text-blue-600" 
+              : "border-transparent text-gray-500 hover:text-gray-700"
           }`}
         >
-          <FaHome size={20} />
+          <FaHome size={22} />
         </button>
 
-        {/* Vídeos / Reels */}
-        <button 
+        <button
           onClick={() => navigate("/home")}
-          className={`flex-1 flex justify-center py-2.5 hover:bg-gray-50 transition text-gray-500`}
+          className="flex-1 py-2.5 flex justify-center items-center border-b-2 border-transparent text-gray-500 hover:text-gray-700"
         >
           <FaTv size={20} />
         </button>
 
-        {/* Amigos / Pesquisa */}
-        <button 
+        <button
           onClick={() => navigate("/search")}
-          className={`flex-1 flex justify-center py-2.5 transition ${
-            isActive("/search") 
-              ? "text-blue-600 border-b-4 border-blue-600" 
-              : "hover:bg-gray-50 text-gray-500"
-          }`}
+          className="flex-1 py-2.5 flex justify-center items-center border-b-2 border-transparent text-gray-500 hover:text-gray-700"
         >
-          <FaUserFriends size={20} />
+          <FaUsers size={22} />
         </button>
 
-        {/* Empregos / Vagas */}
-        <button 
+        <button
           onClick={() => navigate("/jobs")}
-          className={`flex-1 flex justify-center py-2.5 transition ${
-            isActive("/jobs") 
-              ? "text-blue-600 border-b-4 border-blue-600" 
-              : "hover:bg-gray-50 text-gray-500"
+          className={`flex-1 py-2.5 flex justify-center items-center border-b-2 transition ${
+            location.pathname === "/jobs" 
+              ? "border-blue-600 text-blue-600" 
+              : "border-transparent text-gray-500 hover:text-gray-700"
           }`}
         >
           <FaBriefcase size={20} />
         </button>
 
-        {/* Notificações Aba */}
-        <button 
-          onClick={() => navigate("/notifications")}
-          className={`flex-1 flex justify-center py-2.5 relative transition ${
-            isActive("/notifications") 
-              ? "text-blue-600 border-b-4 border-blue-600" 
-              : "hover:bg-gray-50 text-gray-500"
+        <button
+          onClick={() => navigate("/profile")}
+          className={`flex-1 py-2.5 flex justify-center items-center border-b-2 transition ${
+            location.pathname === "/profile" 
+              ? "border-blue-600 text-blue-600" 
+              : "border-transparent text-gray-500 hover:text-gray-700"
           }`}
         >
-          <FaBell size={20} />
-          {notifNaoLidas > 0 && (
-            <span className="absolute top-1 right-1/4 bg-red-500 text-white text-[9px] font-bold px-1 rounded-full">
-              {notifNaoLidas > 9 ? "9+" : notifNaoLidas}
-            </span>
-          )}
+          <FaUser size={20} />
         </button>
-      </nav>
+      </div>
+
+      {/* MENU LATERAL / OVERLAY DO MENU DE TRÊS TRAÇOS (Foto 3) */}
+      {showSidebarMenu && (
+        <div className="fixed inset-x-0 top-24 bottom-0 bg-gray-100 z-40 overflow-y-auto p-4 shadow-inner">
+          <div className="max-w-md mx-auto space-y-4">
+            
+            {/* Card do Perfil */}
+            <div 
+              onClick={() => {
+                navigate("/profile");
+                setShowSidebarMenu(false);
+              }}
+              className="bg-white p-3 rounded-xl shadow-sm flex items-center justify-between cursor-pointer hover:bg-gray-50 transition"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center font-bold text-gray-600 text-lg">
+                  {user?.displayName ? user.displayName.charAt(0) : "U"}
+                </div>
+                <span className="font-bold text-gray-800 text-base">
+                  {user?.displayName || "Utilizador Conectamoz"}
+                </span>
+              </div>
+            </div>
+
+            {/* Atalhos e Funcionalidades (Foto 3) */}
+            <div className="bg-white rounded-xl p-2 shadow-sm space-y-1">
+              <p className="px-3 py-1.5 text-xs font-bold text-gray-500">Os teus atalhos</p>
+              
+              <button 
+                onClick={() => { navigate("/search"); setShowSidebarMenu(false); }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-lg transition"
+              >
+                <FaUsers className="text-blue-500" size={18} /> Amigos
+              </button>
+
+              <button 
+                onClick={() => { navigate("/admin"); setShowSidebarMenu(false); }}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-lg transition"
+              >
+                <FaBriefcase className="text-blue-600" size={18} /> Painel Administrativo
+              </button>
+
+              <button 
+                onClick={() => setShowSidebarMenu(false)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-lg transition"
+              >
+                <FaBookmark className="text-purple-500" size={18} /> Guardados
+              </button>
+
+              <button 
+                onClick={() => setShowSidebarMenu(false)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-lg transition"
+              >
+                <FaHistory className="text-blue-400" size={18} /> Memórias
+              </button>
+            </div>
+
+            {/* Ajuda e Definições */}
+            <div className="bg-white rounded-xl p-2 shadow-sm space-y-1">
+              <button 
+                onClick={() => setShowSidebarMenu(false)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-lg transition"
+              >
+                <FaQuestionCircle className="text-gray-500" size={18} /> Ajuda e apoio técnico
+              </button>
+
+              <button 
+                onClick={() => setShowSidebarMenu(false)}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-100 rounded-lg transition"
+              >
+                <FaCog className="text-gray-500" size={18} /> Definições e privacidade
+              </button>
+
+              <button 
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-sm font-semibold text-red-600 hover:bg-red-50 rounded-lg transition"
+              >
+                <FaSignOutAlt size={18} /> Sair da conta
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
     </header>
   );
 }
