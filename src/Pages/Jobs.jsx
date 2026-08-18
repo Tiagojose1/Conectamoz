@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { db, auth } from "../firebase";
-import { collection, query, orderBy, onSnapshot, doc, deleteDoc } from "firebase/firestore";
+import { collection, query, orderBy, limit, onSnapshot, doc, deleteDoc } from "firebase/firestore";
+import { FaBriefcase, FaPlus, FaMapMarkerAlt, FaTrash, FaEnvelope, FaPhone } from "react-icons/fa";
 import Navbar from "../Components/Navbar";
 import BottomNavigation from "../Components/BottomNavigation";
 import CreateJobModal from "../Components/CreateJobModal";
@@ -14,7 +15,12 @@ export default function Jobs() {
   const user = auth.currentUser;
 
   useEffect(() => {
-    const q = query(collection(db, "vagas"), orderBy("criadoEm", "desc"));
+    // Consulta limitada às 15 vagas mais recentes para otimizar leitura e custos
+    const q = query(
+      collection(db, "vagas"),
+      orderBy("criadoEm", "desc"),
+      limit(15)
+    );
 
     const unsubscribe = onSnapshot(
       q,
@@ -56,17 +62,28 @@ export default function Jobs() {
       <Navbar user={user} />
 
       <main className="max-w-xl mx-auto pt-4 px-4 space-y-4">
+        {/* Cabeçalho do Módulo */}
         <div className="bg-white p-4 rounded-xl shadow-sm border flex justify-between items-center">
-          <div>
-            <h1 className="font-bold text-gray-800 text-lg">💼 Oportunidades & Empregos</h1>
-            <p className="text-xs text-gray-500">Encontre ou publique vagas de trabalho</p>
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-lg">
+              <FaBriefcase size={20} />
+            </div>
+            <div>
+              <h1 className="font-bold text-gray-800 text-lg leading-tight">
+                Oportunidades & Empregos
+              </h1>
+              <p className="text-xs text-gray-500">
+                Encontre ou publique vagas de trabalho
+              </p>
+            </div>
           </div>
 
           <button
             onClick={() => setIsModalOpen(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-3 py-2 rounded-lg transition"
+            className="flex items-center space-x-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-3 py-2 rounded-lg transition"
           >
-            + Anunciar Vaga
+            <FaPlus size={12} />
+            <span>Anunciar Vaga</span>
           </button>
         </div>
 
@@ -105,6 +122,7 @@ export default function Jobs() {
           <div className="space-y-3">
             {vagasFiltradas.map((vaga) => {
               const eMinhaVaga = user && user.uid === vaga.autorId;
+              const isEmail = vaga.contacto?.includes("@");
 
               return (
                 <div
@@ -113,20 +131,27 @@ export default function Jobs() {
                 >
                   <div className="flex justify-between items-start">
                     <div>
-                      <h2 className="font-bold text-gray-900 text-base">{vaga.titulo}</h2>
-                      <p className="text-xs font-semibold text-blue-600">{vaga.empresa}</p>
+                      <h2 className="font-bold text-gray-900 text-base">
+                        {vaga.titulo}
+                      </h2>
+                      <p className="text-xs font-semibold text-blue-600">
+                        {vaga.empresa}
+                      </p>
                     </div>
+
                     <div className="flex items-center space-x-2">
-                      <span className="bg-gray-100 text-gray-600 text-xs px-2.5 py-1 rounded-full font-medium">
-                        📍 {vaga.cidade}
+                      <span className="flex items-center space-x-1 bg-gray-100 text-gray-600 text-xs px-2.5 py-1 rounded-full font-medium">
+                        <FaMapMarkerAlt size={10} className="text-gray-400" />
+                        <span>{vaga.cidade}</span>
                       </span>
+
                       {eMinhaVaga && (
                         <button
                           onClick={() => handleApagarVaga(vaga.id)}
-                          className="text-gray-400 hover:text-red-600 text-xs font-semibold p-1"
+                          className="text-gray-400 hover:text-red-600 text-xs p-1 transition"
                           title="Apagar Vaga"
                         >
-                          🗑️
+                          <FaTrash size={13} />
                         </button>
                       )}
                     </div>
@@ -144,13 +169,14 @@ export default function Jobs() {
                     {vaga.contacto && (
                       <a
                         href={
-                          vaga.contacto.includes("@")
+                          isEmail
                             ? `mailto:${vaga.contacto}`
                             : `tel:${vaga.contacto}`
                         }
-                        className="bg-blue-50 text-blue-600 font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-100"
+                        className="flex items-center space-x-1.5 bg-blue-50 text-blue-600 font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-100 transition"
                       >
-                        📩 Candidatar-se
+                        {isEmail ? <FaEnvelope size={12} /> : <FaPhone size={12} />}
+                        <span>Candidatar-se</span>
                       </a>
                     )}
                   </div>
