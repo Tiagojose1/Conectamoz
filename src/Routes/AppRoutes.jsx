@@ -20,6 +20,9 @@ const EditProfile = lazy(() => import("../Pages/EditProfile"));
 const Search = lazy(() => import("../Pages/Search"));
 const Notifications = lazy(() => import("../Pages/Notifications"));
 const Admin = lazy(() => import("../Pages/Admin"));
+const PostDetail = lazy(() => import("../Pages/PostDetail"));
+const Pagamento = lazy(() => import("../Pages/Pagamento")); // 📍 Rota da carteira M-Pesa / e-Mola
+const HistoricoTransacoes = lazy(() => import("../Pages/HistoricoTransacoes")); // 📍 Histórico de Transações
 
 export default function AppRoutes() {
   const [user, setUser] = useState(null);
@@ -72,6 +75,15 @@ export default function AppRoutes() {
             <Route path="/search" element={user ? <Search /> : <Navigate to="/login" />} />
             <Route path="/notifications" element={user ? <Notifications /> : <Navigate to="/login" />} />
             <Route path="/admin" element={user ? <Admin /> : <Navigate to="/login" />} />
+            
+            {/* 📍 Rota da Carteira & Pagamento */}
+            <Route path="/pagamento" element={user ? <Pagamento /> : <Navigate to="/login" />} />
+
+            {/* 📍 Rota do Histórico de Transações */}
+            <Route path="/historico-transacoes" element={user ? <HistoricoTransacoes /> : <Navigate to="/login" />} />
+
+            {/* 📍 Rota do Post Individual */}
+            <Route path="/post/:id" element={user ? <PostDetail /> : <Navigate to="/login" />} />
 
             {/* Redirecionamento Padrão */}
             <Route path="*" element={<Navigate to={user ? "/home" : "/"} />} />

@@ -3,7 +3,7 @@ import { auth, db, storage } from "../firebase";
 import { updateProfile } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { collection, query, where, onSnapshot, orderBy, doc, updateDoc } from "firebase/firestore";
-import { FaCamera, FaUserEdit, FaArrowLeft } from "react-icons/fa";
+import { FaCamera, FaUserEdit, FaArrowLeft, FaCreditCard } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import PostCard from "../Components/PostCard";
 import BottomNavigation from "../Components/BottomNavigation";
@@ -129,14 +129,24 @@ export default function Profile() {
                 </button>
               </div>
 
-              {/* Botão Editar Perfil (Navega para /edit-profile) */}
-              <button 
-                onClick={() => navigate("/edit-profile")}
-                className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs px-3 py-2 rounded-lg transition border"
-              >
-                <FaUserEdit size={14} />
-                Editar perfil
-              </button>
+              {/* Botões Editar Perfil e Carteira M-Pesa */}
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => navigate("/edit-profile")}
+                  className="flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs px-3 py-2 rounded-lg transition border"
+                >
+                  <FaUserEdit size={14} />
+                  Editar
+                </button>
+
+                <button 
+                  onClick={() => navigate("/pagamento")}
+                  className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-3 py-2 rounded-lg transition shadow-sm"
+                >
+                  <FaCreditCard size={13} />
+                  M-Pesa / Carteira
+                </button>
+              </div>
             </div>
 
             {/* Nome e Email */}
@@ -170,10 +180,13 @@ export default function Profile() {
               <PostCard
                 key={post.id}
                 id={post.id}
-                author={post.autorNome || "Utilizador"}
-                content={post.conteudo}
-                likes={post.curtidas || []}
+                autorId={post.autorId}
+                author={post.autorNome || post.author || "Utilizador"}
+                content={post.conteudo || post.content}
+                likes={post.curtidas || post.likes || []}
+                comentarios={post.comentarios || []}
                 imagemUrl={post.imagemUrl}
+                videoUrl={post.videoUrl}
                 autorFoto={photoURL}
               />
             ))}

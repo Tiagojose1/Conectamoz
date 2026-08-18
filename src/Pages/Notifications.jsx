@@ -4,7 +4,7 @@ import { collection, query, where, orderBy, onSnapshot, doc, updateDoc } from "f
 import { useNavigate } from "react-router-dom";
 import Navbar from "../Components/Navbar";
 import BottomNavigation from "../Components/BottomNavigation";
-import { FaHeart, FaComment, FaEnvelope, FaBell, FaCheck } from "react-icons/fa";
+import { FaHeart, FaComment, FaEnvelope, FaBell } from "react-icons/fa";
 
 export default function Notifications() {
   const currentUser = auth.currentUser;
