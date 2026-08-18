@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { db, auth } from "../firebase";
-import { collection, query, orderBy, limit, onSnapshot, doc, deleteDoc } from "firebase/firestore";
-import { FaBriefcase, FaPlus, FaMapMarkerAlt, FaTrash, FaEnvelope, FaPhone } from "react-icons/fa";
+import { collection, query, orderBy, limit, onSnapshot, doc, deleteDoc, getDoc } from "firebase/firestore";
+import { FaBriefcase, FaPlus, FaMapMarkerAlt, FaTrash, FaEnvelope, FaPhone, FaSearch } from "react-icons/fa";
 import Navbar from "../Components/Navbar";
 import BottomNavigation from "../Components/BottomNavigation";
 import CreateJobModal from "../Components/CreateJobModal";
@@ -10,16 +10,34 @@ export default function Jobs() {
   const [vagas, setVagas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtroCidade, setFiltroCidade] = useState("Todas");
+  const [termoPesquisa, setTermoPesquisa] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const user = auth.currentUser;
 
+  // 1. Verificar se o utilizador é administrador
   useEffect(() => {
-    // Consulta limitada às 15 vagas mais recentes para otimizar leitura e custos
+    const checkAdmin = async () => {
+      if (!user) return;
+      try {
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists() && userDoc.data()?.isAdmin === true) {
+          setIsAdmin(true);
+        }
+      } catch (error) {
+        console.error("Erro ao verificar status de admin:", error);
+      }
+    };
+    checkAdmin();
+  }, [user]);
+
+  // 2. Escutar as 20 vagas mais recentes em tempo real
+  useEffect(() => {
     const q = query(
       collection(db, "vagas"),
       orderBy("criadoEm", "desc"),
-      limit(15)
+      limit(20)
     );
 
     const unsubscribe = onSnapshot(
@@ -41,6 +59,7 @@ export default function Jobs() {
     return () => unsubscribe();
   }, []);
 
+  // 3. Eliminar vaga (Dono da vaga ou Admin)
   const handleApagarVaga = async (vagaId) => {
     if (window.confirm("Tem certeza que deseja apagar esta vaga de emprego?")) {
       try {
@@ -52,17 +71,27 @@ export default function Jobs() {
     }
   };
 
-  const vagasFiltradas =
-    filtroCidade === "Todas"
-      ? vagas
-      : vagas.filter((vaga) => vaga.cidade === filtroCidade);
+  // 4. Filtragem dinâmica por cidade e por termo de pesquisa
+  const vagasFiltradas = vagas.filter((vaga) => {
+    const cidadeMatch =
+      filtroCidade === "Todas" ||
+      vaga.cidade === filtroCidade ||
+      vaga.localizacao === filtroCidade;
+
+    const pesquisaMatch =
+      (vaga.titulo || "").toLowerCase().includes(termoPesquisa.toLowerCase()) ||
+      (vaga.empresa || "").toLowerCase().includes(termoPesquisa.toLowerCase()) ||
+      (vaga.descricao || "").toLowerCase().includes(termoPesquisa.toLowerCase());
+
+    return cidadeMatch && pesquisaMatch;
+  });
 
   return (
     <div className="min-h-screen bg-gray-100 pb-24">
       <Navbar user={user} />
 
       <main className="max-w-xl mx-auto pt-4 px-4 space-y-4">
-        {/* Cabeçalho do Módulo */}
+        {/* CABEÇALHO DO MÓDULO */}
         <div className="bg-white p-4 rounded-xl shadow-sm border flex justify-between items-center">
           <div className="flex items-center space-x-3">
             <div className="p-2.5 bg-blue-50 text-blue-600 rounded-lg">
@@ -87,7 +116,19 @@ export default function Jobs() {
           </button>
         </div>
 
-        {/* Filtro por Cidade */}
+        {/* BARRA DE PESQUISA */}
+        <div className="relative">
+          <FaSearch size={12} className="absolute left-3 top-3.5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Pesquisar cargo, empresa ou palavra-chave..."
+            value={termoPesquisa}
+            onChange={(e) => setTermoPesquisa(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs focus:outline-none focus:border-blue-500 shadow-sm"
+          />
+        </div>
+
+        {/* FILTRO POR CIDADE */}
         <div className="flex items-center space-x-2 overflow-x-auto pb-1 text-xs no-scrollbar">
           {["Todas", "Maputo", "Matola", "Beira", "Nampula", "Tete", "Outra / Remoto"].map(
             (cidade) => (
@@ -106,23 +147,24 @@ export default function Jobs() {
           )}
         </div>
 
-        {/* Lista de Vagas */}
+        {/* LISTA DE VAGAS */}
         {loading ? (
-          <div className="text-center py-10 text-gray-500 font-medium animate-pulse">
+          <div className="text-center py-10 text-gray-500 font-medium animate-pulse text-xs">
             A carregar oportunidades...
           </div>
         ) : vagasFiltradas.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-xl border text-gray-500 shadow-sm">
-            <p className="font-semibold text-gray-700">Nenhuma vaga encontrada.</p>
+          <div className="text-center py-12 bg-white rounded-xl border text-gray-500 shadow-sm p-4">
+            <p className="font-semibold text-gray-700 text-sm">Nenhuma vaga encontrada.</p>
             <p className="text-xs text-gray-400 mt-1">
-              Seja o primeiro a publicar uma oportunidade nesta localização!
+              Tenta mudar o filtro ou sê o primeiro a publicar uma oportunidade!
             </p>
           </div>
         ) : (
           <div className="space-y-3">
             {vagasFiltradas.map((vaga) => {
-              const eMinhaVaga = user && user.uid === vaga.autorId;
-              const isEmail = vaga.contacto?.includes("@");
+              const eMinhaVaga = user && (user.uid === vaga.autorId || isAdmin);
+              const contactoTexto = vaga.contacto || vaga.email || "";
+              const isEmail = contactoTexto.includes("@");
 
               return (
                 <div
@@ -142,7 +184,7 @@ export default function Jobs() {
                     <div className="flex items-center space-x-2">
                       <span className="flex items-center space-x-1 bg-gray-100 text-gray-600 text-xs px-2.5 py-1 rounded-full font-medium">
                         <FaMapMarkerAlt size={10} className="text-gray-400" />
-                        <span>{vaga.cidade}</span>
+                        <span>{vaga.cidade || vaga.localizacao || "Moçambique"}</span>
                       </span>
 
                       {eMinhaVaga && (
@@ -157,25 +199,25 @@ export default function Jobs() {
                     </div>
                   </div>
 
-                  <p className="text-gray-700 text-sm leading-relaxed pt-1">
+                  <p className="text-gray-700 text-xs leading-relaxed pt-1">
                     {vaga.descricao}
                   </p>
 
-                  <div className="pt-2 border-t flex justify-between items-center text-xs">
+                  <div className="pt-2 border-t flex justify-between items-center text-[11px]">
                     <span className="text-gray-400">
-                      Publicado por: {vaga.autorNome}
+                      Publicado por: {vaga.autorNome || "Anónimo"}
                     </span>
 
-                    {vaga.contacto && (
+                    {contactoTexto && (
                       <a
                         href={
                           isEmail
-                            ? `mailto:${vaga.contacto}`
-                            : `tel:${vaga.contacto}`
+                            ? `mailto:${contactoTexto}`
+                            : `tel:${contactoTexto}`
                         }
                         className="flex items-center space-x-1.5 bg-blue-50 text-blue-600 font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-100 transition"
                       >
-                        {isEmail ? <FaEnvelope size={12} /> : <FaPhone size={12} />}
+                        {isEmail ? <FaEnvelope size={11} /> : <FaPhone size={11} />}
                         <span>Candidatar-se</span>
                       </a>
                     )}
@@ -187,6 +229,7 @@ export default function Jobs() {
         )}
       </main>
 
+      {/* MODAL DE CRIAÇÃO */}
       <CreateJobModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
