@@ -11,7 +11,10 @@ import {
   collection,
   serverTimestamp
 } from "firebase/firestore";
-import { criarNotificacao } from "../utils/notifications";
+
+// CORREÇÃO AQUI: Atualizado para respeitar as maiúsculas da pasta Utils e do ficheiro Notifications
+import { criarNotificacao } from "../Utils/Notifications";
+
 import {
   FaThumbsUp,
   FaRegThumbsUp,
