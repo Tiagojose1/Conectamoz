@@ -12,7 +12,6 @@ import {
   serverTimestamp
 } from "firebase/firestore";
 
-// CORREÇÃO AQUI: Atualizado para respeitar as maiúsculas da pasta Utils e do ficheiro Notifications
 import { criarNotificacao } from "../Utils/Notifications";
 
 import {
@@ -26,8 +25,7 @@ import {
   FaExclamationTriangle,
   FaCheck,
   FaTimes,
-  FaShareAlt,
-  FaUserCircle
+  FaShareAlt
 } from "react-icons/fa";
 
 export default function PostCard({

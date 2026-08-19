@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { db, auth } from "../firebase"; // Corrigido de "../firebase/config" para "../firebase"
+import { db, auth } from "../firebase";
 import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
 
 // Componentes da Interface
@@ -92,9 +92,11 @@ export default function Home() {
                   id={post.id}
                   autorId={post.autorId || post.uid || post.userId}
                   author={post.autorNome || "Utilizador"}
-                  content={post.conteudo}
-                  likes={post.curtidas || []}
+                  content={post.conteudo || post.content}
+                  likes={post.curtidas || post.likes || []}
+                  comentarios={post.comentarios || []}
                   imagemUrl={post.imagemUrl}
+                  videoUrl={post.videoUrl}
                   autorFoto={post.autorFoto}
                 />
               ))}
