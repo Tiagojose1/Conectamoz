@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { db } from "../firebase";
 import { doc, getDoc } from "firebase/firestore";
-import PostCard from "../components/PostCard";
+import PostCard from "../Components/PostCard"; // Alterado 'components' para 'Components'
 import { FaArrowLeft } from "react-icons/fa";
 
 export default function PostDetail() {
