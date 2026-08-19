@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { db, auth } from "../firebase";
 import {
   doc,
@@ -10,6 +11,7 @@ import {
   collection,
   serverTimestamp
 } from "firebase/firestore";
+import { criarNotificacao } from "../utils/notifications";
 import {
   FaThumbsUp,
   FaRegThumbsUp,
@@ -21,7 +23,8 @@ import {
   FaExclamationTriangle,
   FaCheck,
   FaTimes,
-  FaShareAlt
+  FaShareAlt,
+  FaUserCircle
 } from "react-icons/fa";
 
 export default function PostCard({
@@ -35,6 +38,7 @@ export default function PostCard({
   videoUrl,
   autorFoto
 }) {
+  const navigate = useNavigate();
   const user = auth.currentUser;
   const isLiked = user ? likes.includes(user.uid) : false;
   const isMyPost = user && user.uid === autorId;
@@ -44,6 +48,11 @@ export default function PostCard({
   const [listaComentarios, setListaComentarios] = useState(comentarios);
   const [novoComentario, setNovoComentario] = useState("");
   const [aCarregarComentario, setACarregarComentario] = useState(false);
+
+  // Sincronizar estado local de comentários se as props mudarem
+  useEffect(() => {
+    setListaComentarios(comentarios);
+  }, [comentarios]);
 
   // Estados do Menu e Edição/Eliminação
   const [showMenu, setShowMenu] = useState(false);
@@ -67,15 +76,22 @@ export default function PostCard({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Copiar link do post
+  // Navegar para o perfil do autor
+  const handleIrParaPerfil = () => {
+    if (autorId) {
+      navigate(`/perfil/${autorId}`);
+    }
+  };
+
+  // Copiar link do post ou partilhar
   const handlePartilhar = async () => {
     const linkPost = `${window.location.origin}/post/${id}`;
 
     try {
       if (navigator.share) {
         await navigator.share({
-          title: `Publicação de ${author} no ConectMoz`,
-          text: content ? content.substring(0, 100) : "Vê esta publicação no ConectMoz!",
+          title: `Publicação de ${author} no Conectmoz`,
+          text: content ? content.substring(0, 100) : "Vê esta publicação no Conectmoz!",
           url: linkPost,
         });
       } else {
@@ -97,6 +113,7 @@ export default function PostCard({
       const postRef = doc(db, "posts", id);
       await updateDoc(postRef, {
         content: textoEditado,
+        conteudo: textoEditado,
         atualizadoEm: serverTimestamp()
       });
       setIsEditing(false);
@@ -152,7 +169,7 @@ export default function PostCard({
     }
   };
 
-  // Função para dar/tirar Gosto
+  // Função para dar/tirar Gosto (com Notificação)
   const handleLike = async () => {
     if (!user) return;
     const postRef = doc(db, "posts", id);
@@ -160,40 +177,44 @@ export default function PostCard({
     try {
       if (isLiked) {
         await updateDoc(postRef, {
-          curtidas: arrayRemove(user.uid)
+          curtidas: arrayRemove(user.uid),
+          likes: arrayRemove(user.uid)
         });
       } else {
         await updateDoc(postRef, {
-          curtidas: arrayUnion(user.uid)
+          curtidas: arrayUnion(user.uid),
+          likes: arrayUnion(user.uid)
         });
 
-        if (autorId && autorId !== user.uid) {
-          await addDoc(collection(db, "notificacoes"), {
-            destinatarioId: autorId,
-            remetenteNome: user.displayName || user.email?.split("@")[0] || "Alguém",
-            remetenteFoto: user.photoURL || "",
-            tipo: "like",
-            postId: id,
-            lida: false,
-            criadoEm: serverTimestamp()
-          });
-        }
+        // Notificar o autor do post
+        await criarNotificacao({
+          destinatarioId: autorId,
+          remetente: {
+            uid: user.uid,
+            nome: user.displayName || user.email?.split("@")[0] || "Utilizador",
+            foto: user.photoURL || ""
+          },
+          tipo: "like",
+          postId: id
+        });
       }
     } catch (error) {
       console.error("Erro ao atualizar curtida:", error);
     }
   };
 
-  // Adicionar Comentário (com userId incluído)
+  // Adicionar Comentário (com Notificação)
   const handleAddComment = async (e) => {
     e.preventDefault();
     if (!novoComentario.trim() || !user) return;
 
     setACarregarComentario(true);
+    const textoParaEnviar = novoComentario.trim();
+
     try {
       const comentarioObj = {
         userId: user.uid,
-        texto: novoComentario,
+        texto: textoParaEnviar,
         autorNome: user.displayName || user.email?.split("@")[0] || "Utilizador",
         autorFoto: user.photoURL || "",
         criadoEm: new Date().toISOString()
@@ -204,20 +225,21 @@ export default function PostCard({
         comentarios: arrayUnion(comentarioObj)
       });
 
-      setListaComentarios([...listaComentarios, comentarioObj]);
+      setListaComentarios((prev) => [...prev, comentarioObj]);
       setNovoComentario("");
 
-      if (autorId && autorId !== user.uid) {
-        await addDoc(collection(db, "notificacoes"), {
-          destinatarioId: autorId,
-          remetenteNome: user.displayName || user.email?.split("@")[0] || "Alguém",
-          remetenteFoto: user.photoURL || "",
-          tipo: "comment",
-          postId: id,
-          lida: false,
-          criadoEm: serverTimestamp()
-        });
-      }
+      // Notificar o autor do post
+      await criarNotificacao({
+        destinatarioId: autorId,
+        remetente: {
+          uid: user.uid,
+          nome: user.displayName || user.email?.split("@")[0] || "Utilizador",
+          foto: user.photoURL || ""
+        },
+        tipo: "comentario",
+        postId: id,
+        textoAdicional: textoParaEnviar
+      });
     } catch (error) {
       console.error("Erro ao adicionar comentário:", error);
     } finally {
@@ -235,8 +257,7 @@ export default function PostCard({
         comentarios: arrayRemove(comentarioParaRemover)
       });
 
-      // Atualiza o estado local filtrando o comentário removido
-      setListaComentarios(listaComentarios.filter(c => c !== comentarioParaRemover));
+      setListaComentarios((prev) => prev.filter((c) => c !== comentarioParaRemover));
     } catch (error) {
       console.error("Erro ao apagar comentário:", error);
       alert("Erro ao apagar o comentário.");
@@ -254,17 +275,26 @@ export default function PostCard({
 
       {/* Cabeçalho do Post */}
       <div className="flex items-center justify-between p-4 border-b border-gray-50">
-        <div className="flex items-center gap-3">
+        <div
+          onClick={handleIrParaPerfil}
+          className="flex items-center gap-3 cursor-pointer group"
+        >
           {autorFoto ? (
-            <img src={autorFoto} alt={author} className="w-10 h-10 rounded-full object-cover border" />
+            <img
+              src={autorFoto}
+              alt={author}
+              className="w-10 h-10 rounded-full object-cover border border-gray-200 group-hover:border-blue-600 transition"
+            />
           ) : (
-            <div className="w-10 h-10 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-sm">
               {author ? author[0].toUpperCase() : "U"}
             </div>
           )}
           <div>
-            <h4 className="font-semibold text-gray-800 text-sm">{author}</h4>
-            <span className="text-[10px] text-gray-400">Publicado no ConectMoz</span>
+            <h4 className="font-semibold text-gray-800 text-sm group-hover:text-blue-600 transition">
+              {author || "Utilizador Conectamoz"}
+            </h4>
+            <span className="text-[10px] text-gray-400 block">Publicado no Conectmoz</span>
           </div>
         </div>
 
@@ -413,14 +443,33 @@ export default function PostCard({
 
               return (
                 <div key={index} className="flex items-start gap-2 text-xs group">
-                  <div className="w-6 h-6 rounded-full bg-gray-300 text-gray-700 font-bold flex items-center justify-center text-[10px] shrink-0">
-                    {c.autorNome ? c.autorNome[0].toUpperCase() : "U"}
+                  <div
+                    onClick={() => c.userId && navigate(`/perfil/${c.userId}`)}
+                    className="cursor-pointer shrink-0 mt-0.5"
+                  >
+                    {c.autorFoto ? (
+                      <img
+                        src={c.autorFoto}
+                        alt={c.autorNome}
+                        className="w-6 h-6 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-6 h-6 rounded-full bg-gray-300 text-gray-700 font-bold flex items-center justify-center text-[10px]">
+                        {c.autorNome ? c.autorNome[0].toUpperCase() : "U"}
+                      </div>
+                    )}
                   </div>
-                  <div className="bg-white p-2.5 rounded-xl border flex-1 relative">
+
+                  <div className="bg-white p-2.5 rounded-xl border border-gray-100 flex-1 relative">
                     <div className="flex items-center justify-between">
-                      <span className="font-semibold text-gray-800">{c.autorNome}</span>
-                      
-                      {/* Botão para apagar comentário (autor do comentário ou autor do post) */}
+                      <span
+                        onClick={() => c.userId && navigate(`/perfil/${c.userId}`)}
+                        className="font-semibold text-gray-800 cursor-pointer hover:underline"
+                      >
+                        {c.autorNome}
+                      </span>
+
+                      {/* Botão para apagar comentário */}
                       {eMeuComentario && (
                         <button
                           onClick={() => handleEliminarComentario(c)}
@@ -450,7 +499,7 @@ export default function PostCard({
             <button
               type="submit"
               disabled={aCarregarComentario || !novoComentario.trim()}
-              className="bg-blue-600 text-white p-2 rounded-full disabled:opacity-50"
+              className="bg-blue-600 text-white p-2 rounded-full disabled:opacity-50 hover:bg-blue-700 transition"
             >
               <FaPaperPlane size={12} />
             </button>

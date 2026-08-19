@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { db, auth, storage } from "../firebase";
+import { db, auth } from "../firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { uploadToCloudinary } from "../services/uploadService";
 import { FaTimes, FaImage, FaVideo, FaSpinner, FaTrash } from "react-icons/fa";
 
 export default function CreatePostModal({ isOpen, onClose }) {
@@ -34,33 +34,28 @@ export default function CreatePostModal({ isOpen, onClose }) {
     setLoading(true);
 
     try {
-      let mediaUrl = "";
+      let uploadRes = { type: null, url: "" };
 
-      // Upload do ficheiro (Foto ou Vídeo) para o Firebase Storage
-      if (mediaFile && user) {
-        const folder = mediaType === "video" ? "videos" : "images";
-        const fileRef = ref(
-          storage,
-          `posts/${folder}/${user.uid}_${Date.now()}_${mediaFile.name}`
-        );
-        await uploadBytes(fileRef, mediaFile);
-        mediaUrl = await getDownloadURL(fileRef);
+      // 1. Upload do ficheiro para o Cloudinary (em vez do Firebase Storage)
+      if (mediaFile) {
+        uploadRes = await uploadToCloudinary(mediaFile);
       }
 
-      // Salvar a publicação no Firestore
+      // 2. Salvar a publicação no Firestore com a URL gerada
       await addDoc(collection(db, "posts"), {
         autorId: user?.uid || "",
         autorNome: user?.displayName || user?.email?.split("@")[0] || "Utilizador",
         autorFoto: user?.photoURL || "",
         conteudo: conteudo.trim(),
-        imagemUrl: mediaType === "image" ? mediaUrl : "",
-        videoUrl: mediaType === "video" ? mediaUrl : "",
+        content: conteudo.trim(), // Garante compatibilidade caso o teu Feed leia "content"
+        imagemUrl: uploadRes.type === "image" ? uploadRes.url : "",
+        videoUrl: uploadRes.type === "video" ? uploadRes.url : "",
         curtidas: [],
         comentarios: [],
         criadoEm: serverTimestamp(),
       });
 
-      // Limpar campos e fechar o modal
+      // 3. Limpar campos e fechar o modal
       setConteudo("");
       setMediaFile(null);
       setMediaType(null);

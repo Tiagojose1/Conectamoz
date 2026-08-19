@@ -1,39 +1,47 @@
 import React, { useState, useEffect } from "react";
-import { db, auth } from "../firebase";
-import { collection, query, where, orderBy, onSnapshot, doc, updateDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
-import Navbar from "../Components/Navbar";
-import BottomNavigation from "../Components/BottomNavigation";
-import { FaHeart, FaComment, FaEnvelope, FaBell } from "react-icons/fa";
+import { db, auth } from "../firebase";
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+  doc,
+  updateDoc,
+  writeBatch
+} from "firebase/firestore";
+import { FaHeart, FaComment, FaUserCircle, FaCheckDouble, FaArrowLeft } from "react-icons/fa";
 
 export default function Notifications() {
+  const [notificacoes, setNotificacoes] = useState([]);
+  const [carregando, setCarregando] = useState(true);
   const currentUser = auth.currentUser;
   const navigate = useNavigate();
 
-  const [notificacoes, setNotificacoes] = useState([]);
-  const [carregando, setCarregando] = useState(true);
-
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      setCarregando(false);
+      return;
+    }
 
+    // Escuta notificações em tempo real destinadas ao utilizador logado
     const q = query(
       collection(db, "notificacoes"),
-      where("destinatarioId", "==", currentUser.uid),
-      orderBy("criadoEm", "desc")
+      where("destinatarioId", "==", currentUser.uid)
     );
 
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const lista = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+        const lista = snapshot.docs
+          .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
         setNotificacoes(lista);
         setCarregando(false);
       },
       (error) => {
-        console.error("Erro ao carregar notificações:", error);
+        console.error("Erro ao escutar notificações:", error);
         setCarregando(false);
       }
     );
@@ -41,89 +49,133 @@ export default function Notifications() {
     return () => unsubscribe();
   }, [currentUser]);
 
-  // Marcar notificação como lida ao clicar
-  const handleClicarNotificacao = async (notificacao) => {
+  // Marcar uma notificação específica como lida e ir para o post
+  const handleNotificacaoClick = async (notificacao) => {
     try {
       if (!notificacao.lida) {
         const notifRef = doc(db, "notificacoes", notificacao.id);
         await updateDoc(notifRef, { lida: true });
       }
-
-      if (notificacao.link) {
-        navigate(notificacao.link);
-      }
-    } catch (error) {
-      console.error("Erro ao marcar como lida:", error);
+      navigate(`/post/${notificacao.postId}`);
+    } catch (err) {
+      console.error("Erro ao atualizar notificação:", err);
+      navigate(`/post/${notificacao.postId}`);
     }
   };
 
-  // Renderiza o ícone de acordo com o tipo
-  const renderIcone = (tipo) => {
-    switch (tipo) {
-      case "like":
-        return <FaHeart className="text-red-500" size={16} />;
-      case "comment":
-        return <FaComment className="text-blue-500" size={16} />;
-      case "message":
-        return <FaEnvelope className="text-green-500" size={16} />;
-      default:
-        return <FaBell className="text-gray-500" size={16} />;
+  // Marcar todas as notificações como lidas
+  const marcarTodasComoLidas = async () => {
+    const naoLidas = notificacoes.filter((n) => !n.lida);
+    if (naoLidas.length === 0) return;
+
+    try {
+      const batch = writeBatch(db);
+      naoLidas.forEach((n) => {
+        const notifRef = doc(db, "notificacoes", n.id);
+        batch.update(notifRef, { lida: true });
+      });
+      await batch.commit();
+    } catch (err) {
+      console.error("Erro ao marcar todas como lidas:", err);
     }
   };
+
+  if (carregando) {
+    return (
+      <div className="flex justify-center items-center min-h-[60vh]">
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  const temNaoLidas = notificacoes.some((n) => !n.lida);
 
   return (
-    <div className="min-h-screen bg-gray-100 pb-24">
-      <Navbar user={currentUser} />
-
-      <main className="max-w-xl mx-auto pt-4 px-4 space-y-4">
-        <div className="flex items-center justify-between bg-white p-4 rounded-xl border shadow-sm">
-          <h1 className="font-bold text-gray-800 text-base flex items-center gap-2">
-            <FaBell className="text-blue-600" /> Notificações
-          </h1>
-          <span className="text-xs bg-blue-100 text-blue-600 font-bold px-2.5 py-1 rounded-full">
-            {notificacoes.filter((n) => !n.lida).length} não lidas
-          </span>
+    <div className="max-w-lg mx-auto p-4 space-y-4">
+      {/* Topo */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="text-gray-600 hover:text-gray-900"
+          >
+            <FaArrowLeft size={16} />
+          </button>
+          <h2 className="text-xl font-bold text-gray-900">Notificações</h2>
         </div>
 
-        {carregando ? (
-          <div className="text-center py-10 text-xs text-gray-400 animate-pulse">
-            A carregar notificações...
-          </div>
-        ) : notificacoes.length === 0 ? (
-          <div className="bg-white p-8 rounded-2xl text-center border text-gray-400 text-xs">
-            Ainda não tens nenhuma notificação.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {notificacoes.map((n) => (
-              <div
-                key={n.id}
-                onClick={() => handleClicarNotificacao(n)}
-                className={`p-3.5 rounded-xl border transition cursor-pointer flex items-center justify-between gap-3 ${
-                  n.lida ? "bg-white border-gray-200" : "bg-blue-50/70 border-blue-200 shadow-sm"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 rounded-full bg-white border shadow-sm">
-                    {renderIcone(n.tipo)}
-                  </div>
-                  <div>
-                    <p className="text-xs sm:text-sm text-gray-800">
-                      <strong className="font-bold">{n.remetenteNome}</strong> {n.texto}
-                    </p>
-                  </div>
-                </div>
+        {temNaoLidas && (
+          <button
+            onClick={marcarTodasComoLidas}
+            className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-xl transition"
+          >
+            <FaCheckDouble size={12} /> Marcar todas como lidas
+          </button>
+        )}
+      </div>
 
-                {!n.lida && (
-                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600 flex-shrink-0" />
+      {/* Lista de Notificações */}
+      {notificacoes.length === 0 ? (
+        <div className="bg-white rounded-2xl p-8 text-center text-gray-500 border border-gray-100 shadow-sm">
+          <p className="text-sm">Ainda não tens notificações.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {notificacoes.map((item) => (
+            <div
+              key={item.id}
+              onClick={() => handleNotificacaoClick(item)}
+              className={`flex items-center gap-3 p-3.5 rounded-2xl border cursor-pointer transition ${
+                item.lida
+                  ? "bg-white border-gray-100 hover:bg-gray-50"
+                  : "bg-blue-50/60 border-blue-100 hover:bg-blue-50"
+              }`}
+            >
+              {/* Foto do Remetente */}
+              <div className="relative">
+                {item.remetenteFoto ? (
+                  <img
+                    src={item.remetenteFoto}
+                    alt={item.remetenteNome}
+                    className="w-11 h-11 rounded-full object-cover border border-gray-200"
+                  />
+                ) : (
+                  <FaUserCircle className="w-11 h-11 text-gray-300" />
+                )}
+
+                {/* Ícone do tipo de ação */}
+                <span
+                  className={`absolute -bottom-1 -right-1 p-1 rounded-full text-white text-[10px] ${
+                    item.tipo === "like" ? "bg-red-500" : "bg-blue-500"
+                  }`}
+                >
+                  {item.tipo === "like" ? <FaHeart size={10} /> : <FaComment size={10} />}
+                </span>
+              </div>
+
+              {/* Mensagem */}
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-gray-800 leading-snug">
+                  <span className="font-bold text-gray-900">{item.remetenteNome}</span>{" "}
+                  {item.tipo === "like"
+                    ? "gostou da tua publicação."
+                    : "comentou na tua publicação."}
+                </p>
+                {item.textoAdicional && (
+                  <p className="text-xs text-gray-500 truncate mt-0.5 italic">
+                    "{item.textoAdicional}"
+                  </p>
                 )}
               </div>
-            ))}
-          </div>
-        )}
-      </main>
 
-      <BottomNavigation />
+              {/* Ponto indicador de não lida */}
+              {!item.lida && (
+                <div className="w-2.5 h-2.5 bg-blue-600 rounded-full flex-shrink-0"></div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

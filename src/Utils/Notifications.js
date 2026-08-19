@@ -3,29 +3,35 @@ import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 
 /**
  * Cria uma notificação no Firestore
- * @param {string} destinatarioId - ID do utilizador que vai receber a notificação
- * @param {string} remetenteId - ID do utilizador que fez a ação
- * @param {string} remetenteNome - Nome do utilizador que fez a ação
- * @param {string} tipo - 'like' | 'comment' | 'message'
- * @param {string} texto - Mensagem descritiva da notificação
- * @param {string} link - Rota para onde o utilizador vai ao clicar (ex: '/chat' ou '/post/123')
+ * @param {string} destinatarioId - ID do dono do post que vai receber a notificação
+ * @param {object} remetente - Dados de quem fez a ação { uid, nome, foto }
+ * @param {string} tipo - 'like' | 'comentario'
+ * @param {string} postId - ID do post relacionado
+ * @param {string} textoAdicional - Opcional (ex: o texto do comentário)
  */
-export const enviarNotificacao = async ({ destinatarioId, remetenteId, remetenteNome, tipo, texto, link = "" }) => {
-  // Evitar notificar a si mesmo
-  if (!destinatarioId || destinatarioId === remetenteId) return;
+export const criarNotificacao = async ({
+  destinatarioId,
+  remetente,
+  tipo,
+  postId,
+  textoAdicional = ""
+}) => {
+  // Não cria notificação se o utilizador reagir ao próprio post
+  if (!destinatarioId || destinatarioId === remetente.uid) return;
 
   try {
     await addDoc(collection(db, "notificacoes"), {
       destinatarioId,
-      remetenteId,
-      remetenteNome,
-      tipo,
-      texto,
-      link,
+      remetenteId: remetente.uid,
+      remetenteNome: remetente.nome || "Utilizador",
+      remetenteFoto: remetente.foto || "",
+      tipo, // 'like' ou 'comentario' 'partilha'
+      postId,
+      textoAdicional,
       lida: false,
-      criadoEm: serverTimestamp(),
+      createdAt: serverTimestamp()
     });
   } catch (error) {
-    console.error("Erro ao enviar notificação:", error);
+    console.error("Erro ao criar notificação:", error);
   }
 };

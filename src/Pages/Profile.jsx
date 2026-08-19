@@ -1,200 +1,309 @@
-import React, { useState, useEffect, useRef } from "react";
-import { auth, db, storage } from "../firebase";
-import { updateProfile } from "firebase/auth";
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { db, auth, storage } from "../firebase";
+import {
+  doc,
+  getDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  updateDoc,
+  writeBatch
+} from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { collection, query, where, onSnapshot, orderBy, doc, updateDoc } from "firebase/firestore";
-import { FaCamera, FaUserEdit, FaArrowLeft, FaCreditCard } from "react-icons/fa";
-import { useNavigate } from "react-router-dom";
 import PostCard from "../Components/PostCard";
-import BottomNavigation from "../Components/BottomNavigation";
+import { FaArrowLeft, FaEdit, FaUserCircle, FaCamera } from "react-icons/fa";
 
 export default function Profile() {
-  const currentUser = auth.currentUser;
+  const { userId } = useParams();
   const navigate = useNavigate();
 
+  const currentUser = auth.currentUser;
+  const isOwnProfile = currentUser && currentUser.uid === userId;
+
+  const [usuario, setUsuario] = useState(null);
   const [posts, setPosts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [carregandoFoto, setCarregandoFoto] = useState(false);
-  const [photoURL, setPhotoURL] = useState(currentUser?.photoURL || "");
+  const [carregando, setCarregando] = useState(true);
 
-  const fileInputRef = useRef(null);
+  // Estados para edição de perfil
+  const [editando, setEditando] = useState(false);
+  const [novoNome, setNovoNome] = useState("");
+  const [novaBio, setNovaBio] = useState("");
+  const [novaFoto, setNovaFoto] = useState(null);
+  const [fotoPreview, setFotoPreview] = useState(null);
+  const [salvando, setSalvando] = useState(false);
 
-  // Carregar apenas os posts do utilizador ligado
   useEffect(() => {
-    if (!currentUser) return;
+    const carregarPerfilEPosts = async () => {
+      try {
+        setCarregando(true);
 
-    const q = query(
-      collection(db, "posts"),
-      where("autorId", "==", currentUser.uid),
-      orderBy("criadoEm", "desc")
-    );
+        // 1. Obter dados do utilizador
+        const userRef = doc(db, "users", userId);
+        const userSnap = await getDoc(userRef);
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const meusPosts = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        setPosts(meusPosts);
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Erro ao carregar posts do perfil:", error);
-        setLoading(false);
+        if (userSnap.exists()) {
+          const dadosUser = userSnap.data();
+          setUsuario(dadosUser);
+          setNovoNome(dadosUser.nome || dadosUser.displayName || "");
+          setNovaBio(dadosUser.bio || "");
+          setFotoPreview(dadosUser.fotoUrl || dadosUser.photoURL || null);
+        } else {
+          setUsuario(null);
+        }
+
+        // 2. Obter apenas os posts deste utilizador
+        const postsRef = collection(db, "posts");
+        const q = query(postsRef, where("autorId", "==", userId));
+        const querySnapshot = await getDocs(q);
+
+        const userPosts = querySnapshot.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+        setPosts(userPosts);
+      } catch (err) {
+        console.error("Erro ao carregar perfil:", err);
+      } finally {
+        setCarregando(false);
       }
-    );
+    };
 
-    return () => unsubscribe();
-  }, [currentUser]);
+    if (userId) {
+      carregarPerfilEPosts();
+    }
+  }, [userId]);
 
-  // Upload da nova Foto de Perfil
-  const handleImageChange = async (e) => {
+  const handleFotoChange = (e) => {
     const file = e.target.files[0];
-    if (!file || !currentUser) return;
-
-    try {
-      setCarregandoFoto(true);
-      const storageRef = ref(storage, `profiles/${currentUser.uid}_${Date.now()}`);
-      await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(storageRef);
-
-      // 1. Atualizar no Firebase Auth
-      await updateProfile(currentUser, { photoURL: downloadURL });
-
-      // 2. Atualizar no Firestore para sincronizar na Pesquisa/Comentários
-      const userDocRef = doc(db, "usuarios", currentUser.uid);
-      await updateDoc(userDocRef, { photoURL: downloadURL }).catch(() => {});
-
-      setPhotoURL(downloadURL);
-    } catch (error) {
-      console.error("Erro ao atualizar foto de perfil:", error);
-    } finally {
-      setCarregandoFoto(false);
+    if (file) {
+      setNovaFoto(file);
+      setFotoPreview(URL.createObjectURL(file));
     }
   };
 
-  const userInitial = currentUser?.displayName 
-    ? currentUser.displayName[0].toUpperCase() 
-    : (currentUser?.email ? currentUser.email[0].toUpperCase() : "U");
+  const salvarPerfil = async (e) => {
+    e.preventDefault();
+    if (!isOwnProfile) return;
+
+    try {
+      setSalvando(true);
+      let urlFotoFinal = usuario.fotoUrl || usuario.photoURL || "";
+
+      // Upload da nova foto de perfil (se selecionada)
+      if (novaFoto) {
+        const fotoRef = ref(storage, `perfis/${userId}_${Date.now()}`);
+        await uploadBytes(fotoRef, novaFoto);
+        urlFotoFinal = await getDownloadURL(fotoRef);
+      }
+
+      const userRef = doc(db, "users", userId);
+      const novosDados = {
+        nome: novoNome,
+        bio: novaBio,
+        fotoUrl: urlFotoFinal
+      };
+
+      await updateDoc(userRef, novosDados);
+
+      // Atualiza o autor de todos os posts passados no Firestore
+      if (posts.length > 0) {
+        const batch = writeBatch(db);
+        posts.forEach((post) => {
+          const postRef = doc(db, "posts", post.id);
+          batch.update(postRef, {
+            author: novoNome,
+            autorNome: novoNome,
+            autorFoto: urlFotoFinal
+          });
+        });
+        await batch.commit();
+      }
+
+      setUsuario((prev) => ({
+        ...prev,
+        ...novosDados
+      }));
+
+      // Atualiza a lista local de posts
+      setPosts((prev) =>
+        prev.map((p) => ({
+          ...p,
+          author: novoNome,
+          autorNome: novoNome,
+          autorFoto: urlFotoFinal
+        }))
+      );
+
+      setEditando(false);
+      setNovaFoto(null);
+    } catch (err) {
+      console.error("Erro ao atualizar perfil:", err);
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  if (carregando) {
+    return (
+      <div className="flex justify-center items-center min-h-[60vh]">
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (!usuario) {
+    return (
+      <div className="max-w-lg mx-auto p-6 text-center">
+        <h3 className="text-lg font-semibold text-gray-800">Utilizador não encontrado</h3>
+        <button
+          onClick={() => navigate("/")}
+          className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-xl font-medium hover:bg-blue-700 transition"
+        >
+          Voltar ao Feed
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-100 pb-24">
-      {/* Barra Topo com Botão Voltar */}
-      <div className="bg-white border-b sticky top-0 z-10 px-4 py-3 flex items-center gap-3">
-        <button onClick={() => navigate("/")} className="text-gray-600 hover:text-black">
-          <FaArrowLeft size={18} />
-        </button>
-        <h2 className="font-bold text-gray-800 text-lg">Perfil</h2>
-      </div>
+    <div className="max-w-lg mx-auto p-4 space-y-6">
+      {/* Botão de Voltar */}
+      <button
+        onClick={() => navigate(-1)}
+        className="flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm font-medium"
+      >
+        <FaArrowLeft size={14} /> Voltar
+      </button>
 
-      <main className="max-w-xl mx-auto px-2 sm:px-4 pt-2">
-        {/* Cartão de Perfil */}
-        <div className="bg-white rounded-xl shadow-sm border overflow-hidden mb-4">
-          {/* Capa */}
-          <div className="h-32 bg-gradient-to-r from-blue-600 to-indigo-600 relative"></div>
+      {/* Cartão de Perfil */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+        <div className="flex items-center gap-4">
+          <div className="relative">
+            {fotoPreview ? (
+              <img
+                src={fotoPreview}
+                alt={usuario.nome}
+                className="w-20 h-20 rounded-full object-cover border-2 border-blue-600"
+              />
+            ) : (
+              <FaUserCircle className="w-20 h-20 text-gray-300" />
+            )}
 
-          {/* Foto e Informações */}
-          <div className="px-4 pb-4 relative">
-            <div className="flex justify-between items-end -mt-12 mb-3">
-              {/* Foto de Perfil com botão de editar */}
-              <div className="relative">
-                {photoURL ? (
-                  <img
-                    src={photoURL}
-                    alt="Perfil"
-                    className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-md bg-white"
-                  />
-                ) : (
-                  <div className="w-24 h-24 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-3xl border-4 border-white shadow-md">
-                    {userInitial}
-                  </div>
-                )}
-
+            {editando && (
+              <label className="absolute bottom-0 right-0 bg-blue-600 text-white p-1.5 rounded-full cursor-pointer hover:bg-blue-700 shadow">
+                <FaCamera size={12} />
                 <input
                   type="file"
                   accept="image/*"
-                  ref={fileInputRef}
-                  onChange={handleImageChange}
+                  onChange={handleFotoChange}
                   className="hidden"
                 />
+              </label>
+            )}
+          </div>
 
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={carregandoFoto}
-                  className="absolute bottom-0 right-0 bg-gray-800 hover:bg-black text-white p-2 rounded-full border-2 border-white transition shadow"
-                  title="Mudar foto de perfil"
-                >
-                  <FaCamera size={12} />
-                </button>
-              </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-xl font-bold text-gray-900 truncate">
+              {usuario.nome || usuario.displayName || "Utilizador Conectamoz"}
+            </h2>
+            <p className="text-sm text-gray-500 truncate">{usuario.email}</p>
+            <p className="text-xs text-blue-600 font-semibold mt-1">
+              {posts.length} {posts.length === 1 ? "Publicação" : "Publicações"}
+            </p>
+          </div>
+        </div>
 
-              {/* Botões Editar Perfil e Carteira M-Pesa */}
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => navigate("/edit-profile")}
-                  className="flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold text-xs px-3 py-2 rounded-lg transition border"
-                >
-                  <FaUserEdit size={14} />
-                  Editar
-                </button>
+        {/* Biografia */}
+        {usuario.bio && !editando && (
+          <p className="mt-4 text-sm text-gray-700 bg-gray-50 p-3 rounded-xl border border-gray-100">
+            {usuario.bio}
+          </p>
+        )}
 
-                <button 
-                  onClick={() => navigate("/pagamento")}
-                  className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-3 py-2 rounded-lg transition shadow-sm"
-                >
-                  <FaCreditCard size={13} />
-                  M-Pesa / Carteira
-                </button>
-              </div>
-            </div>
+        {/* Botão Editar */}
+        {isOwnProfile && !editando && (
+          <button
+            onClick={() => setEditando(true)}
+            className="mt-4 w-full flex items-center justify-center gap-2 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-xl transition"
+          >
+            <FaEdit size={14} /> Editar Perfil
+          </button>
+        )}
 
-            {/* Nome e Email */}
+        {/* Formulário de Edição */}
+        {editando && (
+          <form onSubmit={salvarPerfil} className="mt-4 space-y-3">
             <div>
-              <h3 className="font-bold text-gray-900 text-lg leading-tight">
-                {currentUser?.displayName || currentUser?.email?.split("@")[0]}
-              </h3>
-              <p className="text-xs text-gray-500 mt-0.5">{currentUser?.email}</p>
+              <label className="text-xs font-semibold text-gray-600 block mb-1">Nome</label>
+              <input
+                type="text"
+                value={novoNome}
+                onChange={(e) => setNovoNome(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-600"
+                required
+              />
             </div>
-          </div>
-        </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-600 block mb-1">Biografia</label>
+              <textarea
+                value={novaBio}
+                onChange={(e) => setNovaBio(e.target.value)}
+                rows={3}
+                placeholder="Escreve algo sobre ti..."
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-600 resize-none"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={salvando}
+                className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition disabled:opacity-50"
+              >
+                {salvando ? "A guardar..." : "Guardar"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditando(false);
+                  setFotoPreview(usuario.fotoUrl || usuario.photoURL || null);
+                  setNovaFoto(null);
+                }}
+                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-xl transition"
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
 
-        {/* Separador do Feed Pessoal */}
-        <div className="mb-3">
-          <h4 className="font-bold text-gray-800 text-sm">As tuas publicações</h4>
-        </div>
+      {/* Lista de Publicações do Utilizador */}
+      <div className="space-y-4">
+        <h3 className="text-base font-bold text-gray-800 px-1">Publicações</h3>
 
-        {/* Publicações do Utilizador */}
-        {loading ? (
-          <div className="text-center py-10 text-gray-500 font-medium animate-pulse">
-            A carregar o teu perfil...
-          </div>
-        ) : posts.length === 0 ? (
-          <div className="text-center py-10 bg-white rounded-xl border text-gray-500">
-            <p className="font-semibold text-gray-700">Ainda não fizeste nenhuma publicação.</p>
-            <p className="text-xs text-gray-400 mt-1">Partilha algo com a comunidade no feed!</p>
+        {posts.length === 0 ? (
+          <div className="bg-white rounded-2xl p-6 text-center text-gray-500 text-sm border border-gray-100">
+            Nenhuma publicação feita até ao momento.
           </div>
         ) : (
-          <div className="space-y-4">
-            {posts.map((post) => (
-              <PostCard
-                key={post.id}
-                id={post.id}
-                autorId={post.autorId}
-                author={post.autorNome || post.author || "Utilizador"}
-                content={post.conteudo || post.content}
-                likes={post.curtidas || post.likes || []}
-                comentarios={post.comentarios || []}
-                imagemUrl={post.imagemUrl}
-                videoUrl={post.videoUrl}
-                autorFoto={photoURL}
-              />
-            ))}
-          </div>
+          posts.map((post) => (
+            <PostCard
+              key={post.id}
+              id={post.id}
+              autorId={post.autorId}
+              author={post.author || post.autorNome}
+              content={post.content || post.conteudo}
+              likes={post.curtidas || post.likes || []}
+              comentarios={post.comentarios || []}
+              imagemUrl={post.imagemUrl}
+              videoUrl={post.videoUrl}
+              autorFoto={post.autorFoto}
+            />
+          ))
         )}
-      </main>
-
-      <BottomNavigation />
+      </div>
     </div>
   );
 }
