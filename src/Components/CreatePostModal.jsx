@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { db, auth } from "../firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { uploadToCloudinary } from "../services/uploadService";
+import { uploadParaCloudinary } from "../Utils/Cloudinary";
 import { FaTimes, FaImage, FaVideo, FaSpinner, FaTrash } from "react-icons/fa";
 
 export default function CreatePostModal({ isOpen, onClose }) {
@@ -34,11 +34,11 @@ export default function CreatePostModal({ isOpen, onClose }) {
     setLoading(true);
 
     try {
-      let uploadRes = { type: null, url: "" };
+      let uploadedUrl = "";
 
       // 1. Upload do ficheiro para o Cloudinary (em vez do Firebase Storage)
       if (mediaFile) {
-        uploadRes = await uploadToCloudinary(mediaFile);
+        uploadedUrl = await uploadParaCloudinary(mediaFile);
       }
 
       // 2. Salvar a publicação no Firestore com a URL gerada
@@ -48,8 +48,8 @@ export default function CreatePostModal({ isOpen, onClose }) {
         autorFoto: user?.photoURL || "",
         conteudo: conteudo.trim(),
         content: conteudo.trim(), // Garante compatibilidade caso o teu Feed leia "content"
-        imagemUrl: uploadRes.type === "image" ? uploadRes.url : "",
-        videoUrl: uploadRes.type === "video" ? uploadRes.url : "",
+        imagemUrl: mediaType === "image" ? uploadedUrl : "",
+        videoUrl: mediaType === "video" ? uploadedUrl : "",
         curtidas: [],
         comentarios: [],
         criadoEm: serverTimestamp(),
