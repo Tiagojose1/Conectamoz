@@ -65,7 +65,7 @@ export default function Profile() {
         setPosts(userPosts);
       } catch (err) {
         console.error("Erro ao carregar perfil:", err);
-      } font-medium {
+      } finally {
         setCarregando(false);
       }
     };
