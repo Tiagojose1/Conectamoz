@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy } from "react";
+import React, { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../firebase";
@@ -11,18 +11,18 @@ import Splash from "../Pages/Splash";
 import Login from "../Pages/Login";
 import Register from "../Pages/Register";
 
-// Code Splitting / Lazy Loading
-const Home = lazy(() => import("../Pages/Home"));
-const Jobs = lazy(() => import("../Pages/Jobs"));
-const Chat = lazy(() => import("../Pages/Chat"));
-const Profile = lazy(() => import("../Pages/Profile"));
-const EditProfile = lazy(() => import("../Pages/EditProfile"));
-const Search = lazy(() => import("../Pages/Search"));
-const Notifications = lazy(() => import("../Pages/Notifications"));
-const Admin = lazy(() => import("../Pages/Admin"));
-const PostDetail = lazy(() => import("../Pages/PostDetail"));
-const Pagamento = lazy(() => import("../Pages/Pagamento"));
-const HistoricoTransacoes = lazy(() => import("../Pages/HistoricoTransacoes"));
+// Importações diretas (Substituindo lazy loading para evitar o Erro #306)
+import Home from "../Pages/Home";
+import Jobs from "../Pages/Jobs";
+import Chat from "../Pages/Chat";
+import Profile from "../Pages/Profile";
+import EditProfile from "../Pages/EditProfile";
+import Search from "../Pages/Search";
+import Notifications from "../Pages/Notifications";
+import Admin from "../Pages/Admin";
+import PostDetail from "../Pages/PostDetail";
+import Pagamento from "../Pages/Pagamento";
+import HistoricoTransacoes from "../Pages/HistoricoTransacoes";
 
 // Componente Wrapper para Rotas Protegidas
 const ProtectedRoute = ({ user, children }) => {
@@ -57,49 +57,41 @@ export default function AppRoutes() {
       {user && <Navbar />}
 
       <div className={user ? "pt-20 min-h-screen bg-gray-100" : "min-h-screen"}>
-        <Suspense
-          fallback={
-            <div className="min-h-screen flex items-center justify-center text-gray-500 font-medium">
-              A carregar conteúdo...
-            </div>
-          }
-        >
-          <Routes>
-            {/* Rotas Públicas */}
-            <Route path="/" element={user ? <Navigate to="/home" /> : <Splash />} />
-            <Route path="/login" element={user ? <Navigate to="/home" /> : <Login />} />
-            <Route path="/register" element={user ? <Navigate to="/home" /> : <Register />} />
+        <Routes>
+          {/* Rotas Públicas */}
+          <Route path="/" element={user ? <Navigate to="/home" /> : <Splash />} />
+          <Route path="/login" element={user ? <Navigate to="/home" /> : <Login />} />
+          <Route path="/register" element={user ? <Navigate to="/home" /> : <Register />} />
 
-            {/* Rotas Protegidas */}
-            <Route path="/home" element={<ProtectedRoute user={user}><Home /></ProtectedRoute>} />
-            <Route path="/jobs" element={<ProtectedRoute user={user}><Jobs /></ProtectedRoute>} />
-            <Route path="/chat" element={<ProtectedRoute user={user}><Chat /></ProtectedRoute>} />
-            
-            {/* Perfis */}
-            <Route path="/profile/:userId" element={<ProtectedRoute user={user}><Profile /></ProtectedRoute>} />
-            <Route path="/perfil/:userId" element={<ProtectedRoute user={user}><Profile /></ProtectedRoute>} />
-            <Route path="/profile" element={user ? <Navigate to={`/profile/${user.uid}`} replace /> : <Navigate to="/login" />} />
-            <Route path="/edit-profile" element={<ProtectedRoute user={user}><EditProfile /></ProtectedRoute>} />
-            
-            {/* Pesquisa e Notificações */}
-            <Route path="/search" element={<ProtectedRoute user={user}><Search /></ProtectedRoute>} />
-            <Route path="/notifications" element={<ProtectedRoute user={user}><Notifications /></ProtectedRoute>} />
-            <Route path="/notificacoes" element={<Navigate to="/notifications" replace />} />
+          {/* Rotas Protegidas */}
+          <Route path="/home" element={<ProtectedRoute user={user}><Home /></ProtectedRoute>} />
+          <Route path="/jobs" element={<ProtectedRoute user={user}><Jobs /></ProtectedRoute>} />
+          <Route path="/chat" element={<ProtectedRoute user={user}><Chat /></ProtectedRoute>} />
 
-            {/* Post Único */}
-            <Route path="/post/:id" element={<ProtectedRoute user={user}><PostDetail /></ProtectedRoute>} />
+          {/* Perfis */}
+          <Route path="/profile/:userId" element={<ProtectedRoute user={user}><Profile /></ProtectedRoute>} />
+          <Route path="/perfil/:userId" element={<ProtectedRoute user={user}><Profile /></ProtectedRoute>} />
+          <Route path="/profile" element={user ? <Navigate to={`/profile/${user.uid}`} replace /> : <Navigate to="/login" />} />
+          <Route path="/edit-profile" element={<ProtectedRoute user={user}><EditProfile /></ProtectedRoute>} />
 
-            {/* Finanças / Carteira M-Pesa e e-Mola */}
-            <Route path="/pagamento" element={<ProtectedRoute user={user}><Pagamento /></ProtectedRoute>} />
-            <Route path="/historico-transacoes" element={<ProtectedRoute user={user}><HistoricoTransacoes /></ProtectedRoute>} />
+          {/* Pesquisa e Notificações */}
+          <Route path="/search" element={<ProtectedRoute user={user}><Search /></ProtectedRoute>} />
+          <Route path="/notifications" element={<ProtectedRoute user={user}><Notifications /></ProtectedRoute>} />
+          <Route path="/notificacoes" element={<Navigate to="/notifications" replace />} />
 
-            {/* Gestão */}
-            <Route path="/admin" element={<ProtectedRoute user={user}><Admin /></ProtectedRoute>} />
+          {/* Post Único */}
+          <Route path="/post/:id" element={<ProtectedRoute user={user}><PostDetail /></ProtectedRoute>} />
 
-            {/* Rota Fallback */}
-            <Route path="*" element={<Navigate to={user ? "/home" : "/"} replace />} />
-          </Routes>
-        </Suspense>
+          {/* Finanças / Carteira M-Pesa e e-Mola */}
+          <Route path="/pagamento" element={<ProtectedRoute user={user}><Pagamento /></ProtectedRoute>} />
+          <Route path="/historico-transacoes" element={<ProtectedRoute user={user}><HistoricoTransacoes /></ProtectedRoute>} />
+
+          {/* Gestão */}
+          <Route path="/admin" element={<ProtectedRoute user={user}><Admin /></ProtectedRoute>} />
+
+          {/* Rota Fallback */}
+          <Route path="*" element={<Navigate to={user ? "/home" : "/"} replace />} />
+        </Routes>
       </div>
     </BrowserRouter>
   );
