@@ -24,7 +24,7 @@ export default function Notifications() {
       return;
     }
 
-    // Escuta notificações em tempo real destinadas ao utilizador logado
+    // Escuta notificações em tempo real para o utilizador logado
     const q = query(
       collection(db, "notificacoes"),
       where("destinatarioId", "==", currentUser.uid)
@@ -35,7 +35,11 @@ export default function Notifications() {
       (snapshot) => {
         const lista = snapshot.docs
           .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
-          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+          .sort((a, b) => {
+            const dataA = a.createdAt?.seconds || a.criadoEm?.seconds || 0;
+            const dataB = b.createdAt?.seconds || b.criadoEm?.seconds || 0;
+            return dataB - dataA;
+          });
 
         setNotificacoes(lista);
         setCarregando(false);
@@ -49,21 +53,25 @@ export default function Notifications() {
     return () => unsubscribe();
   }, [currentUser]);
 
-  // Marcar uma notificação específica como lida e ir para o post
+  // Marcar uma notificação específica como lida e navegar para o post
   const handleNotificacaoClick = async (notificacao) => {
     try {
       if (!notificacao.lida) {
         const notifRef = doc(db, "notificacoes", notificacao.id);
         await updateDoc(notifRef, { lida: true });
       }
-      navigate(`/post/${notificacao.postId}`);
+      if (notificacao.postId) {
+        navigate(`/post/${notificacao.postId}`);
+      }
     } catch (err) {
       console.error("Erro ao atualizar notificação:", err);
-      navigate(`/post/${notificacao.postId}`);
+      if (notificacao.postId) {
+        navigate(`/post/${notificacao.postId}`);
+      }
     }
   };
 
-  // Marcar todas as notificações como lidas
+  // Marcar todas as notificações como lidas em batch
   const marcarTodasComoLidas = async () => {
     const naoLidas = notificacoes.filter((n) => !n.lida);
     if (naoLidas.length === 0) return;
@@ -97,7 +105,7 @@ export default function Notifications() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
-            className="text-gray-600 hover:text-gray-900"
+            className="text-gray-600 hover:text-gray-900 transition"
           >
             <FaArrowLeft size={16} />
           </button>
@@ -121,59 +129,65 @@ export default function Notifications() {
         </div>
       ) : (
         <div className="space-y-2">
-          {notificacoes.map((item) => (
-            <div
-              key={item.id}
-              onClick={() => handleNotificacaoClick(item)}
-              className={`flex items-center gap-3 p-3.5 rounded-2xl border cursor-pointer transition ${
-                item.lida
-                  ? "bg-white border-gray-100 hover:bg-gray-50"
-                  : "bg-blue-50/60 border-blue-100 hover:bg-blue-50"
-              }`}
-            >
-              {/* Foto do Remetente */}
-              <div className="relative">
-                {item.remetenteFoto ? (
-                  <img
-                    src={item.remetenteFoto}
-                    alt={item.remetenteNome}
-                    className="w-11 h-11 rounded-full object-cover border border-gray-200"
-                  />
-                ) : (
-                  <FaUserCircle className="w-11 h-11 text-gray-300" />
-                )}
+          {notificacoes.map((item) => {
+            // Suporte para ambas as estruturas de dados (direta ou aninhada)
+            const nomeRemetente = item.remetenteNome || item.remetente?.nome || "Utilizador";
+            const fotoRemetente = item.remetenteFoto || item.remetente?.foto;
 
-                {/* Ícone do tipo de ação */}
-                <span
-                  className={`absolute -bottom-1 -right-1 p-1 rounded-full text-white text-[10px] ${
-                    item.tipo === "like" ? "bg-red-500" : "bg-blue-500"
-                  }`}
-                >
-                  {item.tipo === "like" ? <FaHeart size={10} /> : <FaComment size={10} />}
-                </span>
-              </div>
+            return (
+              <div
+                key={item.id}
+                onClick={() => handleNotificacaoClick(item)}
+                className={`flex items-center gap-3 p-3.5 rounded-2xl border cursor-pointer transition ${
+                  item.lida
+                    ? "bg-white border-gray-100 hover:bg-gray-50"
+                    : "bg-blue-50/60 border-blue-100 hover:bg-blue-50"
+                }`}
+              >
+                {/* Foto do Remetente */}
+                <div className="relative shrink-0">
+                  {fotoRemetente ? (
+                    <img
+                      src={fotoRemetente}
+                      alt={nomeRemetente}
+                      className="w-11 h-11 rounded-full object-cover border border-gray-200"
+                    />
+                  ) : (
+                    <FaUserCircle className="w-11 h-11 text-gray-300" />
+                  )}
 
-              {/* Mensagem */}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-gray-800 leading-snug">
-                  <span className="font-bold text-gray-900">{item.remetenteNome}</span>{" "}
-                  {item.tipo === "like"
-                    ? "gostou da tua publicação."
-                    : "comentou na tua publicação."}
-                </p>
-                {item.textoAdicional && (
-                  <p className="text-xs text-gray-500 truncate mt-0.5 italic">
-                    "{item.textoAdicional}"
+                  {/* Ícone do tipo de ação */}
+                  <span
+                    className={`absolute -bottom-1 -right-1 p-1 rounded-full text-white text-[10px] ${
+                      item.tipo === "like" ? "bg-red-500" : "bg-blue-500"
+                    }`}
+                  >
+                    {item.tipo === "like" ? <FaHeart size={10} /> : <FaComment size={10} />}
+                  </span>
+                </div>
+
+                {/* Mensagem */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-gray-800 leading-snug">
+                    <span className="font-bold text-gray-900">{nomeRemetente}</span>{" "}
+                    {item.tipo === "like"
+                      ? "gostou da tua publicação."
+                      : "comentou na tua publicação."}
                   </p>
+                  {item.textoAdicional && (
+                    <p className="text-xs text-gray-500 truncate mt-0.5 italic">
+                      "{item.textoAdicional}"
+                    </p>
+                  )}
+                </div>
+
+                {/* Indicador de não lida */}
+                {!item.lida && (
+                  <div className="w-2.5 h-2.5 bg-blue-600 rounded-full shrink-0"></div>
                 )}
               </div>
-
-              {/* Ponto indicador de não lida */}
-              {!item.lida && (
-                <div className="w-2.5 h-2.5 bg-blue-600 rounded-full flex-shrink-0"></div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

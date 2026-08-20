@@ -32,7 +32,9 @@ export default function Pagamento() {
     e.preventDefault();
     setErro("");
 
-    if (!validarTelefone(telefone, metodo)) {
+    const telefoneLimpo = telefone.replace(/\D/g, "");
+
+    if (!validarTelefone(telefoneLimpo, metodo)) {
       setErro(
         metodo === "mpesa"
           ? "O número M-Pesa deve começar com 84 ou 85 e ter 9 dígitos."
@@ -54,22 +56,18 @@ export default function Pagamento() {
         userId: currentUser?.uid || "anonimo",
         userEmail: currentUser?.email || "",
         metodo,
-        telefone,
+        telefone: telefoneLimpo,
         valor: Number(valor),
         moeda: "MZN",
-        status: "pendente", // 'pendente' -> 'sucesso' via webhook/API backend
+        status: "pendente",
         criadoEm: serverTimestamp(),
       });
 
-      // Simulação da chamada de API da Gateway (C2B M-Pesa / e-Mola)
-      setTimeout(() => {
-        setLoading(false);
-        setSucesso(true);
-      }, 2000);
-
+      setSucesso(true);
     } catch (err) {
       console.error("Erro no pagamento:", err);
       setErro("Falha ao processar pagamento. Tenta novamente.");
+    } finally {
       setLoading(false);
     }
   };
@@ -91,7 +89,6 @@ export default function Pagamento() {
             <h1 className="font-bold text-gray-800 text-lg">Carteira & Pagamentos</h1>
           </div>
 
-          {/* Botão de Atalho para o Histórico no Header */}
           <button
             onClick={() => navigate("/historico-transacoes")}
             className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded-lg border border-emerald-200 transition"
@@ -106,9 +103,9 @@ export default function Pagamento() {
           {sucesso ? (
             <div className="text-center py-8 space-y-4">
               <FaCheckCircle size={56} className="text-emerald-500 mx-auto animate-bounce" />
-              <h2 className="text-xl font-bold text-gray-800">Pedido Recibo enviado!</h2>
+              <h2 className="text-xl font-bold text-gray-800">Pedido enviado!</h2>
               <p className="text-sm text-gray-600">
-                Confirma o PIN no teu telemóvel (<strong>{telefone}</strong>) para concluir a transferência de{" "}
+                Confirma o PIN no teu telemóvel (<strong>{telefone}</strong>) para concluir o pagamento de{" "}
                 <strong>{valor} MZN</strong> via {metodo === "mpesa" ? "M-Pesa" : "e-Mola"}.
               </p>
               <div className="pt-2 space-y-2">
@@ -207,7 +204,7 @@ export default function Pagamento() {
                     maxLength={9}
                     placeholder={metodo === "mpesa" ? "841234567 ou 85..." : "861234567 ou 87..."}
                     value={telefone}
-                    onChange={(e) => setTelefone(e.target.value)}
+                    onChange={(e) => setTelefone(e.target.value.replace(/\D/g, ""))}
                     required
                     className="w-full pl-11 pr-4 py-3 bg-gray-50 border rounded-xl font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white"
                   />
@@ -244,7 +241,6 @@ export default function Pagamento() {
           )}
         </div>
 
-        {/* Rodapé informativo */}
         <div className="bg-gray-50 border-t p-3 text-center text-xs text-gray-400">
           Pagamento seguro via API Moçambique Mobile Money
         </div>

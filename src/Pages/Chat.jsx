@@ -3,15 +3,18 @@ import { db, auth } from "../firebase";
 import {
   collection,
   addDoc,
+  doc,
+  updateDoc,
   query,
   where,
   orderBy,
   onSnapshot,
   serverTimestamp,
-  getDocs
+  getDocs,
 } from "firebase/firestore";
 import Navbar from "../Components/Navbar";
 import BottomNavigation from "../Components/BottomNavigation";
+import { FaPaperPlane, FaPlus, FaArrowLeft, FaUserCircle } from "react-icons/fa";
 
 export default function Chat() {
   const currentUser = auth.currentUser;
@@ -38,6 +41,14 @@ export default function Chat() {
         id: doc.id,
         ...doc.data(),
       }));
+
+      // Ordena por mensagem mais recente no cliente
+      list.sort((a, b) => {
+        const timeA = a.ultimaMensagemEm?.toMillis() || 0;
+        const timeB = b.ultimaMensagemEm?.toMillis() || 0;
+        return timeB - timeA;
+      });
+
       setConversas(list);
     });
 
@@ -75,7 +86,7 @@ export default function Chat() {
       const querySnapshot = await getDocs(collection(db, "users"));
       const lista = querySnapshot.docs
         .map((doc) => ({ id: doc.id, ...doc.data() }))
-        .filter((u) => u.uid !== currentUser.uid);
+        .filter((u) => (u.uid || u.id) !== currentUser.uid);
 
       setUsuariosDisponiveis(lista);
       setMostrandoListaUsuarios(true);
@@ -87,10 +98,11 @@ export default function Chat() {
   // Iniciar ou abrir conversa com um utilizador específico
   const handleIniciarConversaCom = async (outroUsuario) => {
     setMostrandoListaUsuarios(false);
+    const targetUid = outroUsuario.uid || outroUsuario.id;
 
     // Verificar se já existe conversa entre os dois
     const conversaExistente = conversas.find((c) =>
-      c.participantes.includes(outroUsuario.uid)
+      c.participantes.includes(targetUid)
     );
 
     if (conversaExistente) {
@@ -100,24 +112,33 @@ export default function Chat() {
 
     // Criar nova conversa no Firestore
     try {
-      const meuNome = currentUser.displayName || currentUser.email.split("@")[0];
-      const outroNome = outroUsuario.nome || outroUsuario.email.split("@")[0];
+      const meuNome = currentUser.displayName || currentUser.email?.split("@")[0] || "Utilizador";
+      const outroNome = outroUsuario.nome || outroUsuario.displayName || outroUsuario.email?.split("@")[0] || "Contacto";
+      const fotoOutro = outroUsuario.fotoPerfil || outroUsuario.photoURL || "";
 
       const docRef = await addDoc(collection(db, "chats"), {
-        participantes: [currentUser.uid, outroUsuario.uid],
+        participantes: [currentUser.uid, targetUid],
         nomesParticipantes: {
           [currentUser.uid]: meuNome,
-          [outroUsuario.uid]: outroNome,
+          [targetUid]: outroNome,
+        },
+        fotosParticipantes: {
+          [targetUid]: fotoOutro,
         },
         criadoEm: serverTimestamp(),
+        ultimaMensagem: "",
+        ultimaMensagemEm: serverTimestamp(),
       });
 
       setConversaAtiva({
         id: docRef.id,
-        participantes: [currentUser.uid, outroUsuario.uid],
+        participantes: [currentUser.uid, targetUid],
         nomesParticipantes: {
           [currentUser.uid]: meuNome,
-          [outroUsuario.uid]: outroNome,
+          [targetUid]: outroNome,
+        },
+        fotosParticipantes: {
+          [targetUid]: fotoOutro,
         },
       });
     } catch (error) {
@@ -134,14 +155,28 @@ export default function Chat() {
       const msgTexto = novaMensagem.trim();
       setNovaMensagem("");
 
+      // 1. Adiciona a mensagem à subcoleção
       await addDoc(collection(db, "chats", conversaAtiva.id, "mensagens"), {
         texto: msgTexto,
         enviadoPor: currentUser.uid,
         criadoEm: serverTimestamp(),
       });
+
+      // 2. Atualiza o documento pai com a última mensagem
+      const chatRef = doc(db, "chats", conversaAtiva.id);
+      await updateDoc(chatRef, {
+        ultimaMensagem: msgTexto,
+        ultimaMensagemEm: serverTimestamp(),
+      });
     } catch (error) {
       console.error("Erro ao enviar mensagem:", error);
     }
+  };
+
+  const formatarHora = (timestamp) => {
+    if (!timestamp) return "";
+    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
   return (
@@ -149,53 +184,60 @@ export default function Chat() {
       <Navbar user={currentUser} />
 
       <main className="max-w-xl mx-auto pt-4 px-4">
-        <div className="bg-white rounded-2xl shadow-sm border overflow-hidden h-[75vh] flex flex-col">
+        <div className="bg-white rounded-2xl shadow-sm border overflow-hidden h-[78vh] flex flex-col">
+          
           {/* Cabeçalho do Chat */}
           <div className="p-4 border-b bg-gray-50 flex items-center justify-between">
-            <h1 className="font-bold text-gray-800 text-base">
-              💬{" "}
-              {conversaAtiva
-                ? conversaAtiva.nomesParticipantes?.[
-                    conversaAtiva.participantes.find((id) => id !== currentUser.uid)
-                  ] || "Mensagens"
-                : "Minhas Conversas"}
-            </h1>
-
             {conversaAtiva ? (
-              <button
-                onClick={() => setConversaAtiva(null)}
-                className="text-xs text-blue-600 font-semibold hover:underline"
-              >
-                Voltar às conversas
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setConversaAtiva(null)}
+                  className="text-gray-600 hover:text-black p-1 rounded-full"
+                >
+                  <FaArrowLeft size={16} />
+                </button>
+                <h1 className="font-bold text-gray-800 text-sm flex items-center gap-2">
+                  <span>💬</span>
+                  {conversaAtiva.nomesParticipantes?.[
+                    conversaAtiva.participantes.find((id) => id !== currentUser.uid)
+                  ] || "Conversa"}
+                </h1>
+              </div>
             ) : (
-              <button
-                onClick={handleAbrirNovaConversa}
-                className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg font-semibold hover:bg-blue-700 transition"
-              >
-                + Nova Conversa
-              </button>
+              <>
+                <h1 className="font-bold text-gray-800 text-base flex items-center gap-2">
+                  <span>💬</span> Minhas Conversas
+                </h1>
+                {!mostrandoListaUsuarios && (
+                  <button
+                    onClick={handleAbrirNovaConversa}
+                    className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-xl font-bold hover:bg-blue-700 transition flex items-center gap-1.5 shadow-sm"
+                  >
+                    <FaPlus size={10} /> Nova Conversa
+                  </button>
+                )}
+              </>
             )}
           </div>
 
           {/* Modal / Lista de Utilizadores para Iniciar Conversa */}
           {mostrandoListaUsuarios ? (
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-bold text-gray-600">
-                  Seleciona alguém para conversar:
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                  Seleciona um contacto:
                 </span>
                 <button
                   onClick={() => setMostrandoListaUsuarios(false)}
-                  className="text-xs text-red-500 font-semibold"
+                  className="text-xs text-red-500 font-bold hover:underline"
                 >
                   Cancelar
                 </button>
               </div>
 
               {usuariosDisponiveis.length === 0 ? (
-                <p className="text-xs text-gray-400 text-center py-6">
-                  Nenhum utilizador encontrado.
+                <p className="text-xs text-gray-400 text-center py-8">
+                  Nenhum utilizador disponível no momento.
                 </p>
               ) : (
                 usuariosDisponiveis.map((u) => (
@@ -204,13 +246,26 @@ export default function Chat() {
                     onClick={() => handleIniciarConversaCom(u)}
                     className="p-3 bg-gray-50 hover:bg-blue-50 border rounded-xl cursor-pointer transition flex items-center justify-between"
                   >
-                    <div>
-                      <h4 className="font-bold text-sm text-gray-800">
-                        {u.nome || u.email.split("@")[0]}
-                      </h4>
-                      <p className="text-xs text-gray-400">{u.email}</p>
+                    <div className="flex items-center gap-3">
+                      {u.fotoPerfil || u.photoURL ? (
+                        <img
+                          src={u.fotoPerfil || u.photoURL}
+                          alt="Perfil"
+                          className="w-10 h-10 rounded-full object-cover border"
+                        />
+                      ) : (
+                        <FaUserCircle className="w-10 h-10 text-gray-300" />
+                      )}
+                      <div>
+                        <h4 className="font-bold text-sm text-gray-800">
+                          {u.nome || u.displayName || u.email?.split("@")[0]}
+                        </h4>
+                        <p className="text-xs text-gray-400">{u.email}</p>
+                      </div>
                     </div>
-                    <span className="text-xs text-blue-600 font-bold">Conversar</span>
+                    <span className="text-xs text-blue-600 font-bold bg-blue-100 px-2.5 py-1 rounded-lg">
+                      Conversar
+                    </span>
                   </div>
                 ))
               )}
@@ -219,38 +274,58 @@ export default function Chat() {
             /* Área Principal: Lista de Conversas */
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
               {conversas.length === 0 ? (
-                <div className="text-center py-12 text-gray-400 text-xs">
-                  Ainda não tem nenhuma conversa iniciada.
+                <div className="text-center py-16 text-gray-400 text-xs">
+                  Ainda não tens nenhuma conversa iniciada.
                   <br />
-                  Clica em <strong>+ Nova Conversa</strong> acima!
+                  Clica em <strong>+ Nova Conversa</strong> acima para começar!
                 </div>
               ) : (
-                conversas.map((chat) => (
-                  <div
-                    key={chat.id}
-                    onClick={() => setConversaAtiva(chat)}
-                    className="p-3 bg-gray-50 hover:bg-blue-50 border rounded-xl cursor-pointer transition flex items-center justify-between"
-                  >
-                    <div>
-                      <h3 className="font-bold text-sm text-gray-800">
-                        {chat.nomesParticipantes?.[
-                          chat.participantes.find((id) => id !== currentUser.uid)
-                        ] || "Conversa"}
-                      </h3>
-                      <p className="text-xs text-gray-500">Clique para abrir a conversa</p>
+                conversas.map((chat) => {
+                  const outroId = chat.participantes.find((id) => id !== currentUser.uid);
+                  const nomeOutro = chat.nomesParticipantes?.[outroId] || "Contacto";
+                  const fotoOutro = chat.fotosParticipantes?.[outroId];
+
+                  return (
+                    <div
+                      key={chat.id}
+                      onClick={() => setConversaAtiva(chat)}
+                      className="p-3 bg-gray-50 hover:bg-blue-50 border rounded-xl cursor-pointer transition flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        {fotoOutro ? (
+                          <img
+                            src={fotoOutro}
+                            alt={nomeOutro}
+                            className="w-11 h-11 rounded-full object-cover border"
+                          />
+                        ) : (
+                          <FaUserCircle className="w-11 h-11 text-gray-300" />
+                        )}
+                        <div>
+                          <h3 className="font-bold text-sm text-gray-800">{nomeOutro}</h3>
+                          <p className="text-xs text-gray-500 line-clamp-1">
+                            {chat.ultimaMensagem || "Clica para abrir a conversa"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {chat.ultimaMensagemEm && (
+                        <span className="text-[10px] text-gray-400 font-medium">
+                          {formatarHora(chat.ultimaMensagemEm)}
+                        </span>
+                      )}
                     </div>
-                    <span className="text-xs text-blue-600 font-bold">➡️</span>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           ) : (
             /* Janela de Mensagens */
-            <div className="flex-1 flex flex-col justify-between overflow-hidden">
+            <div className="flex-1 flex flex-col justify-between overflow-hidden bg-gray-50/50">
               {/* Mensagens */}
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {mensagens.length === 0 ? (
-                  <p className="text-center text-xs text-gray-400 my-auto">
+                  <p className="text-center text-xs text-gray-400 my-auto py-12">
                     Nenhuma mensagem ainda. Envia a primeira!
                   </p>
                 ) : (
@@ -262,13 +337,22 @@ export default function Chat() {
                         className={`flex ${eMinha ? "justify-end" : "justify-start"}`}
                       >
                         <div
-                          className={`max-w-[75%] p-3 rounded-2xl text-xs ${
+                          className={`max-w-[78%] p-3 rounded-2xl text-xs shadow-sm ${
                             eMinha
                               ? "bg-blue-600 text-white rounded-br-none"
-                              : "bg-gray-100 text-gray-800 rounded-bl-none"
+                              : "bg-white text-gray-800 border rounded-bl-none"
                           }`}
                         >
-                          {msg.texto}
+                          <p className="leading-relaxed">{msg.texto}</p>
+                          {msg.criadoEm && (
+                            <span
+                              className={`block text-[9px] mt-1 text-right ${
+                                eMinha ? "text-blue-200" : "text-gray-400"
+                              }`}
+                            >
+                              {formatarHora(msg.criadoEm)}
+                            </span>
+                          )}
                         </div>
                       </div>
                     );
@@ -278,20 +362,20 @@ export default function Chat() {
               </div>
 
               {/* Form Envio */}
-              <form onSubmit={handleEnviar} className="p-3 border-t bg-gray-50 flex gap-2">
+              <form onSubmit={handleEnviar} className="p-3 border-t bg-white flex gap-2 items-center">
                 <input
                   type="text"
-                  placeholder="Escreva uma mensagem..."
-                  className="flex-1 p-2.5 text-xs border rounded-xl bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Escreve uma mensagem..."
+                  className="flex-1 p-3 text-xs border rounded-xl bg-gray-50 outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
                   value={novaMensagem}
                   onChange={(e) => setNovaMensagem(e.target.value)}
                 />
                 <button
                   type="submit"
                   disabled={!novaMensagem.trim()}
-                  className="bg-blue-600 text-white font-semibold px-4 py-2 rounded-xl text-xs hover:bg-blue-700 transition disabled:opacity-50"
+                  className="bg-blue-600 text-white p-3 rounded-xl hover:bg-blue-700 transition disabled:opacity-50 shadow-sm"
                 >
-                  Enviar
+                  <FaPaperPlane size={12} />
                 </button>
               </form>
             </div>

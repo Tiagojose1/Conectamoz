@@ -65,7 +65,7 @@ export default function Profile() {
         setPosts(userPosts);
       } catch (err) {
         console.error("Erro ao carregar perfil:", err);
-      } finally {
+      } font-medium {
         setCarregando(false);
       }
     };
@@ -89,7 +89,7 @@ export default function Profile() {
 
     try {
       setSalvando(true);
-      let urlFotoFinal = usuario.fotoUrl || usuario.photoURL || "";
+      let urlFotoFinal = usuario?.fotoUrl || usuario?.photoURL || "";
 
       // Upload da nova foto de perfil (se selecionada)
       if (novaFoto) {
@@ -102,23 +102,30 @@ export default function Profile() {
       const novosDados = {
         nome: novoNome,
         bio: novaBio,
-        fotoUrl: urlFotoFinal
+        fotoUrl: urlFotoFinal,
+        photoURL: urlFotoFinal
       };
 
       await updateDoc(userRef, novosDados);
 
-      // Atualiza o autor de todos os posts passados no Firestore
+      // Atualiza o autor em lotes no Firestore (respeitando o limite de 500 ops do batch)
       if (posts.length > 0) {
-        const batch = writeBatch(db);
-        posts.forEach((post) => {
-          const postRef = doc(db, "posts", post.id);
-          batch.update(postRef, {
-            author: novoNome,
-            autorNome: novoNome,
-            autorFoto: urlFotoFinal
+        const batchSize = 450;
+        for (let i = 0; i < posts.length; i += batchSize) {
+          const batch = writeBatch(db);
+          const chunk = posts.slice(i, i + batchSize);
+          
+          chunk.forEach((post) => {
+            const postRef = doc(db, "posts", post.id);
+            batch.update(postRef, {
+              author: novoNome,
+              autorNome: novoNome,
+              autorFoto: urlFotoFinal
+            });
           });
-        });
-        await batch.commit();
+          
+          await batch.commit();
+        }
       }
 
       setUsuario((prev) => ({
@@ -184,7 +191,7 @@ export default function Profile() {
             {fotoPreview ? (
               <img
                 src={fotoPreview}
-                alt={usuario.nome}
+                alt={usuario.nome || "Utilizador"}
                 className="w-20 h-20 rounded-full object-cover border-2 border-blue-600"
               />
             ) : (

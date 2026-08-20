@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { auth, db } from "../firebase";
-import { collection, query, where, orderBy, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { 
   FaArrowLeft, 
-  FaExchangeAlt, 
   FaCheckCircle, 
   FaClock, 
   FaTimesCircle,
@@ -24,20 +23,27 @@ export default function HistoricoTransacoes() {
       return;
     }
 
-    // Consulta transações onde o utilizador seja autorId ou userId
+    // Consulta corrigida para procurar pelo campo 'userId'
     const q = query(
       collection(db, "transacoes"),
-      where("autorId", "==", currentUser.uid),
-      orderBy("criadoEm", "desc")
+      where("userId", "==", currentUser.uid)
     );
 
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const lista = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
+        const lista = snapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          // Ordenação local por data descendente (evita falhas por falta de índice composto no Firestore)
+          .sort((a, b) => {
+            const dataA = a.criadoEm?.seconds || 0;
+            const dataB = b.criadoEm?.seconds || 0;
+            return dataB - dataA;
+          });
+
         setTransacoes(lista);
         setLoading(false);
       },

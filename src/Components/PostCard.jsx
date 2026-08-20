@@ -91,8 +91,8 @@ export default function PostCard({
     try {
       if (navigator.share) {
         await navigator.share({
-          title: `Publicação de ${author} no Conectmoz`,
-          text: content ? content.substring(0, 100) : "Vê esta publicação no Conectmoz!",
+          title: `Publicação de ${author} no Conectamoz`,
+          text: content ? content.substring(0, 100) : "Vê esta publicação no Conectamoz!",
           url: linkPost,
         });
       } else {
@@ -170,7 +170,7 @@ export default function PostCard({
     }
   };
 
-  // Função para dar/tirar Gosto (com Notificação)
+  // Função para dar/tirar Gosto
   const handleLike = async () => {
     if (!user) return;
     const postRef = doc(db, "posts", id);
@@ -187,24 +187,25 @@ export default function PostCard({
           likes: arrayUnion(user.uid)
         });
 
-        // Notificar o autor do post
-        await criarNotificacao({
-          destinatarioId: autorId,
-          remetente: {
-            uid: user.uid,
-            nome: user.displayName || user.email?.split("@")[0] || "Utilizador",
-            foto: user.photoURL || ""
-          },
-          tipo: "like",
-          postId: id
-        });
+        if (autorId !== user.uid) {
+          await criarNotificacao({
+            destinatarioId: autorId,
+            remetente: {
+              uid: user.uid,
+              nome: user.displayName || user.email?.split("@")[0] || "Utilizador",
+              foto: user.photoURL || ""
+            },
+            tipo: "like",
+            postId: id
+          });
+        }
       }
     } catch (error) {
       console.error("Erro ao atualizar curtida:", error);
     }
   };
 
-  // Adicionar Comentário (com Notificação)
+  // Adicionar Comentário
   const handleAddComment = async (e) => {
     e.preventDefault();
     if (!novoComentario.trim() || !user) return;
@@ -229,18 +230,19 @@ export default function PostCard({
       setListaComentarios((prev) => [...prev, comentarioObj]);
       setNovoComentario("");
 
-      // Notificar o autor do post
-      await criarNotificacao({
-        destinatarioId: autorId,
-        remetente: {
-          uid: user.uid,
-          nome: user.displayName || user.email?.split("@")[0] || "Utilizador",
-          foto: user.photoURL || ""
-        },
-        tipo: "comentario",
-        postId: id,
-        textoAdicional: textoParaEnviar
-      });
+      if (autorId !== user.uid) {
+        await criarNotificacao({
+          destinatarioId: autorId,
+          remetente: {
+            uid: user.uid,
+            nome: user.displayName || user.email?.split("@")[0] || "Utilizador",
+            foto: user.photoURL || ""
+          },
+          tipo: "comentario",
+          postId: id,
+          textoAdicional: textoParaEnviar
+        });
+      }
     } catch (error) {
       console.error("Erro ao adicionar comentário:", error);
     } finally {
@@ -295,7 +297,7 @@ export default function PostCard({
             <h4 className="font-semibold text-gray-800 text-sm group-hover:text-blue-600 transition">
               {author || "Utilizador Conectamoz"}
             </h4>
-            <span className="text-[10px] text-gray-400 block">Publicado no Conectmoz</span>
+            <span className="text-[10px] text-gray-400 block">Publicado no Conectamoz</span>
           </div>
         </div>
 
@@ -390,7 +392,7 @@ export default function PostCard({
         </div>
       )}
 
-      {/* Vídeo / Reels em Anexo */}
+      {/* Vídeo em Anexo */}
       {videoUrl && (
         <div className="w-full bg-black max-h-96 flex justify-center items-center">
           <video src={videoUrl} controls className="w-full max-h-96" />
@@ -437,7 +439,6 @@ export default function PostCard({
       {/* Caixa de Comentários */}
       {mostrarComentarios && (
         <div className="p-4 bg-gray-50 space-y-3">
-          {/* Lista de Comentários */}
           <div className="space-y-2 max-h-48 overflow-y-auto">
             {listaComentarios.map((c, index) => {
               const eMeuComentario = user && (c.userId === user.uid || isMyPost);
@@ -470,7 +471,6 @@ export default function PostCard({
                         {c.autorNome}
                       </span>
 
-                      {/* Botão para apagar comentário */}
                       {eMeuComentario && (
                         <button
                           onClick={() => handleEliminarComentario(c)}
@@ -488,7 +488,6 @@ export default function PostCard({
             })}
           </div>
 
-          {/* Form para novo comentário */}
           <form onSubmit={handleAddComment} className="flex gap-2">
             <input
               type="text"

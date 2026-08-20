@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { db, auth } from "../firebase";
+import { FaArrowLeft } from "react-icons/fa";
 
 function EditProfile() {
   const navigate = useNavigate();
@@ -9,9 +10,10 @@ function EditProfile() {
 
   const [nome, setNome] = useState("");
   const [telefone, setTelefone] = useState("");
-  const [biografia, setBiografia] = useState("");
-  const [mensagem, setMensagem] = useState("");
+  const [bio, setBio] = useState("");
+  const [mensagem, setMensagem] = useState({ texto: "", erro: false });
   const [carregando, setCarregando] = useState(true);
+  const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
     const carregarDados = async () => {
@@ -21,19 +23,20 @@ function EditProfile() {
       }
 
       try {
-        const referencia = doc(db, "usuarios", usuario.uid);
+        // Corrigido para a coleção 'users' utilizada no resto do app
+        const referencia = doc(db, "users", usuario.uid);
         const dados = await getDoc(referencia);
 
         if (dados.exists()) {
           const perfil = dados.data();
-          setNome(perfil.nome || usuario.displayName || "");
+          setNome(perfil.nome || perfil.displayName || usuario.displayName || "");
           setTelefone(perfil.telefone || "");
-          setBiografia(perfil.biografia || "");
+          setBio(perfil.bio || perfil.biografia || "");
         } else {
           setNome(usuario.displayName || "");
         }
       } catch (error) {
-        console.error("Erro ao carregar dados:", error);
+        console.error("Erro ao carregar dados do perfil:", error);
       } finally {
         setCarregando(false);
       }
@@ -42,90 +45,141 @@ function EditProfile() {
     carregarDados();
   }, [usuario, navigate]);
 
-  const salvar = async () => {
+  const salvar = async (e) => {
+    e.preventDefault();
     if (!usuario) return;
 
     try {
-      const referencia = doc(db, "usuarios", usuario.uid);
+      setSalvando(true);
+      setMensagem({ texto: "", erro: false });
 
-      await updateDoc(referencia, {
-        nome,
-        telefone,
-        biografia,
-      });
+      const referencia = doc(db, "users", usuario.uid);
 
-      setMensagem("Perfil atualizado com sucesso! ✅");
+      // Usar setDoc com merge: true evita erros se o documento do user ainda não existir
+      await setDoc(
+        referencia,
+        {
+          nome,
+          telefone: telefone.replace(/\D/g, ""), // Higieniza o telefone
+          bio,
+          updatedAt: new Date(),
+        },
+        { merge: true }
+      );
 
+      setMensagem({ texto: "Perfil atualizado com sucesso! ✅", erro: false });
+
+      // Redireciona para a rota correta do perfil incluindo o ID do utilizador
       setTimeout(() => {
-        navigate("/profile");
-      }, 1500);
+        navigate(`/profile/${usuario.uid}`);
+      }, 1200);
     } catch (error) {
-      setMensagem("Erro ao atualizar perfil.");
-      console.error(error);
+      console.error("Erro ao atualizar perfil:", error);
+      setMensagem({ texto: "Erro ao atualizar perfil. Tenta novamente.", erro: true });
+    } finally {
+      setSalvando(false);
     }
   };
 
   if (carregando) {
     return (
       <div className="min-h-screen flex items-center justify-center text-gray-500 text-sm">
-        Carregando...
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 pb-20">
-      <div className="max-w-xl mx-auto bg-white rounded-xl shadow p-6">
-        <h1 className="text-2xl font-bold text-center text-blue-600">
-          Editar Perfil
-        </h1>
+      <div className="max-w-xl mx-auto bg-white rounded-2xl shadow-sm border p-6">
+        
+        {/* Cabeçalho */}
+        <div className="flex items-center justify-between mb-6">
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="text-gray-600 hover:text-black p-1.5 rounded-full hover:bg-gray-100 transition"
+          >
+            <FaArrowLeft size={16} />
+          </button>
+          <h1 className="text-xl font-bold text-gray-800 text-center flex-1">
+            Editar Perfil
+          </h1>
+          <div className="w-6"></div> {/* Espaçador para alinhar o título */}
+        </div>
 
-        <input
-          type="text"
-          placeholder="Nome completo"
-          value={nome}
-          onChange={(e) => setNome(e.target.value)}
-          className="w-full mt-6 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-        />
+        <form onSubmit={salvar} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+              Nome Completo
+            </label>
+            <input
+              type="text"
+              placeholder="O teu nome"
+              value={nome}
+              onChange={(e) => setNome(e.target.value)}
+              required
+              className="w-full p-3 bg-gray-50 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+            />
+          </div>
 
-        <input
-          type="tel"
-          placeholder="Telefone"
-          value={telefone}
-          onChange={(e) => setTelefone(e.target.value)}
-          className="w-full mt-4 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-        />
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+              Telefone
+            </label>
+            <input
+              type="tel"
+              maxLength={9}
+              placeholder="Ex: 841234567"
+              value={telefone}
+              onChange={(e) => setTelefone(e.target.value.replace(/\D/g, ""))}
+              className="w-full p-3 bg-gray-50 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
+            />
+          </div>
 
-        <textarea
-          placeholder="Biografia"
-          value={biografia}
-          onChange={(e) => setBiografia(e.target.value)}
-          className="w-full mt-4 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-none"
-          rows="4"
-        />
+          <div>
+            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
+              Biografia
+            </label>
+            <textarea
+              placeholder="Escreve algo sobre ti..."
+              value={bio}
+              onChange={(e) => setBio(e.target.value)}
+              className="w-full p-3 bg-gray-50 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white resize-none transition"
+              rows="4"
+            />
+          </div>
 
-        <button
-          onClick={salvar}
-          className="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg font-semibold text-sm transition"
-        >
-          Salvar Alterações
-        </button>
+          {mensagem.texto && (
+            <p
+              className={`text-center text-sm font-medium p-2 rounded-lg ${
+                mensagem.erro ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"
+              }`}
+            >
+              {mensagem.texto}
+            </p>
+          )}
 
-        {mensagem && (
-          <p className="text-center mt-4 text-green-600 text-sm font-medium">
-            {mensagem}
-          </p>
-        )}
+          <button
+            type="submit"
+            disabled={salvando}
+            className={`w-full bg-blue-600 hover:bg-blue-700 text-white p-3.5 rounded-xl font-bold text-sm shadow transition ${
+              salvando ? "opacity-70 cursor-not-allowed" : ""
+            }`}
+          >
+            {salvando ? "A guardar..." : "Salvar Alterações"}
+          </button>
 
-        <button
-          onClick={() => navigate("/profile")}
-          className="w-full mt-4 text-blue-600 text-sm font-semibold hover:underline"
-        >
-          Cancelar
-        </button>
+          <button
+            type="button"
+            onClick={() => navigate(`/profile/${usuario?.uid}`)}
+            className="w-full text-gray-500 text-sm font-semibold hover:underline text-center pt-2"
+          >
+            Cancelar
+          </button>
+        </form>
       </div>
     </div>
   );
 }
-
 export default EditProfile;
