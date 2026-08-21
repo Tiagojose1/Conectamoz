@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { db, auth } from "../firebase";
 import { collection, query, orderBy, limit, onSnapshot, doc, deleteDoc, getDoc } from "firebase/firestore";
 import { FaBriefcase, FaPlus, FaMapMarkerAlt, FaTrash, FaEnvelope, FaPhone, FaSearch } from "react-icons/fa";
-import Navbar from "../Components/Navbar";
 import BottomNavigation from "../Components/BottomNavigation";
 import CreateJobModal from "../Components/CreateJobModal";
 
@@ -88,8 +87,6 @@ export default function Jobs() {
 
   return (
     <div className="min-h-screen bg-gray-100 pb-24">
-      <Navbar user={user} />
-
       <main className="max-w-xl mx-auto pt-4 px-4 space-y-4">
         {/* CABEÇALHO DO MÓDULO */}
         <div className="bg-white p-4 rounded-xl shadow-sm border flex justify-between items-center">

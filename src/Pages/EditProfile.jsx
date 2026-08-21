@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { updateProfile } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import { db, auth } from "../firebase";
 import { FaArrowLeft } from "react-icons/fa";
 
-function EditProfile() {
+export default function EditProfile() {
   const navigate = useNavigate();
   const usuario = auth.currentUser;
 
@@ -16,6 +17,8 @@ function EditProfile() {
   const [salvando, setSalvando] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
+
     const carregarDados = async () => {
       if (!usuario) {
         navigate("/login");
@@ -23,26 +26,31 @@ function EditProfile() {
       }
 
       try {
-        // Corrigido para a coleção 'users' utilizada no resto do app
         const referencia = doc(db, "users", usuario.uid);
         const dados = await getDoc(referencia);
 
-        if (dados.exists()) {
-          const perfil = dados.data();
-          setNome(perfil.nome || perfil.displayName || usuario.displayName || "");
-          setTelefone(perfil.telefone || "");
-          setBio(perfil.bio || perfil.biografia || "");
-        } else {
-          setNome(usuario.displayName || "");
+        if (isMounted) {
+          if (dados.exists()) {
+            const perfil = dados.data();
+            setNome(perfil.nome || perfil.displayName || usuario.displayName || "");
+            setTelefone(perfil.telefone || "");
+            setBio(perfil.bio || perfil.biografia || "");
+          } else {
+            setNome(usuario.displayName || "");
+          }
         }
       } catch (error) {
         console.error("Erro ao carregar dados do perfil:", error);
       } finally {
-        setCarregando(false);
+        if (isMounted) setCarregando(false);
       }
     };
 
     carregarDados();
+
+    return () => {
+      isMounted = false;
+    };
   }, [usuario, navigate]);
 
   const salvar = async (e) => {
@@ -53,29 +61,37 @@ function EditProfile() {
       setSalvando(true);
       setMensagem({ texto: "", erro: false });
 
-      const referencia = doc(db, "users", usuario.uid);
+      const numTelefone = telefone.replace(/\D/g, "");
 
-      // Usar setDoc com merge: true evita erros se o documento do user ainda não existir
+      // 1. Atualizar documento na coleção 'users' no Firestore
+      const referencia = doc(db, "users", usuario.uid);
       await setDoc(
         referencia,
         {
           nome,
-          telefone: telefone.replace(/\D/g, ""), // Higieniza o telefone
+          telefone: numTelefone,
           bio,
-          updatedAt: new Date(),
+          updatedAt: serverTimestamp(),
         },
         { merge: true }
       );
 
+      // 2. Atualizar displayName no Firebase Auth
+      if (auth.currentUser && nome !== auth.currentUser.displayName) {
+        await updateProfile(auth.currentUser, { displayName: nome });
+      }
+
       setMensagem({ texto: "Perfil atualizado com sucesso! ✅", erro: false });
 
-      // Redireciona para a rota correta do perfil incluindo o ID do utilizador
       setTimeout(() => {
         navigate(`/profile/${usuario.uid}`);
-      }, 1200);
+      }, 1000);
     } catch (error) {
       console.error("Erro ao atualizar perfil:", error);
-      setMensagem({ texto: "Erro ao atualizar perfil. Tenta novamente.", erro: true });
+      setMensagem({
+        texto: "Erro ao atualizar perfil. Tenta novamente.",
+        erro: true,
+      });
     } finally {
       setSalvando(false);
     }
@@ -83,7 +99,7 @@ function EditProfile() {
 
   if (carregando) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-gray-500 text-sm">
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 text-gray-500 text-sm">
         <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
@@ -92,7 +108,6 @@ function EditProfile() {
   return (
     <div className="min-h-screen bg-gray-100 p-4 pb-20">
       <div className="max-w-xl mx-auto bg-white rounded-2xl shadow-sm border p-6">
-        
         {/* Cabeçalho */}
         <div className="flex items-center justify-between mb-6">
           <button
@@ -105,7 +120,7 @@ function EditProfile() {
           <h1 className="text-xl font-bold text-gray-800 text-center flex-1">
             Editar Perfil
           </h1>
-          <div className="w-6"></div> {/* Espaçador para alinhar o título */}
+          <div className="w-6"></div>
         </div>
 
         <form onSubmit={salvar} className="space-y-4">
@@ -146,14 +161,16 @@ function EditProfile() {
               value={bio}
               onChange={(e) => setBio(e.target.value)}
               className="w-full p-3 bg-gray-50 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white resize-none transition"
-              rows="4"
+              rows={4}
             />
           </div>
 
           {mensagem.texto && (
             <p
               className={`text-center text-sm font-medium p-2 rounded-lg ${
-                mensagem.erro ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"
+                mensagem.erro
+                  ? "bg-red-50 text-red-600"
+                  : "bg-green-50 text-green-600"
               }`}
             >
               {mensagem.texto}
@@ -182,4 +199,3 @@ function EditProfile() {
     </div>
   );
 }
-export default EditProfile;

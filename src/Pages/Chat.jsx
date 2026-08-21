@@ -12,7 +12,6 @@ import {
   serverTimestamp,
   getDocs,
 } from "firebase/firestore";
-import Navbar from "../Components/Navbar";
 import BottomNavigation from "../Components/BottomNavigation";
 import { FaPaperPlane, FaPlus, FaArrowLeft, FaUserCircle } from "react-icons/fa";
 
@@ -42,10 +41,10 @@ export default function Chat() {
         ...doc.data(),
       }));
 
-      // Ordena por mensagem mais recente no cliente
+      // Ordena por mensagem mais recente no cliente com fallback seguro
       list.sort((a, b) => {
-        const timeA = a.ultimaMensagemEm?.toMillis() || 0;
-        const timeB = b.ultimaMensagemEm?.toMillis() || 0;
+        const timeA = a.ultimaMensagemEm?.toMillis ? a.ultimaMensagemEm.toMillis() : 0;
+        const timeB = b.ultimaMensagemEm?.toMillis ? b.ultimaMensagemEm.toMillis() : 0;
         return timeB - timeA;
       });
 
@@ -82,6 +81,7 @@ export default function Chat() {
 
   // Buscar todos os utilizadores para iniciar nova conversa
   const handleAbrirNovaConversa = async () => {
+    if (!currentUser) return;
     try {
       const querySnapshot = await getDocs(collection(db, "users"));
       const lista = querySnapshot.docs
@@ -97,12 +97,13 @@ export default function Chat() {
 
   // Iniciar ou abrir conversa com um utilizador específico
   const handleIniciarConversaCom = async (outroUsuario) => {
+    if (!currentUser) return;
     setMostrandoListaUsuarios(false);
     const targetUid = outroUsuario.uid || outroUsuario.id;
 
     // Verificar se já existe conversa entre os dois
     const conversaExistente = conversas.find((c) =>
-      c.participantes.includes(targetUid)
+      c.participantes?.includes(targetUid)
     );
 
     if (conversaExistente) {
@@ -175,14 +176,16 @@ export default function Chat() {
 
   const formatarHora = (timestamp) => {
     if (!timestamp) return "";
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    try {
+      const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+      return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    } catch {
+      return "";
+    }
   };
 
   return (
     <div className="min-h-screen bg-gray-100 pb-24">
-      <Navbar user={currentUser} />
-
       <main className="max-w-xl mx-auto pt-4 px-4">
         <div className="bg-white rounded-2xl shadow-sm border overflow-hidden h-[78vh] flex flex-col">
           
@@ -199,7 +202,7 @@ export default function Chat() {
                 <h1 className="font-bold text-gray-800 text-sm flex items-center gap-2">
                   <span>💬</span>
                   {conversaAtiva.nomesParticipantes?.[
-                    conversaAtiva.participantes.find((id) => id !== currentUser.uid)
+                    conversaAtiva.participantes?.find((id) => id !== currentUser?.uid)
                   ] || "Conversa"}
                 </h1>
               </div>
@@ -281,7 +284,7 @@ export default function Chat() {
                 </div>
               ) : (
                 conversas.map((chat) => {
-                  const outroId = chat.participantes.find((id) => id !== currentUser.uid);
+                  const outroId = chat.participantes?.find((id) => id !== currentUser?.uid);
                   const nomeOutro = chat.nomesParticipantes?.[outroId] || "Contacto";
                   const fotoOutro = chat.fotosParticipantes?.[outroId];
 
@@ -330,7 +333,7 @@ export default function Chat() {
                   </p>
                 ) : (
                   mensagens.map((msg) => {
-                    const eMinha = msg.enviadoPor === currentUser.uid;
+                    const eMinha = currentUser && msg.enviadoPor === currentUser.uid;
                     return (
                       <div
                         key={msg.id}

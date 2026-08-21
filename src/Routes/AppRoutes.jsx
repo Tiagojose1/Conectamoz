@@ -11,7 +11,7 @@ import Splash from "../Pages/Splash";
 import Login from "../Pages/Login";
 import Register from "../Pages/Register";
 
-// Importações diretas (Substituindo lazy loading para evitar o Erro #306)
+// Importações diretas de páginas
 import Home from "../Pages/Home";
 import Jobs from "../Pages/Jobs";
 import Chat from "../Pages/Chat";
@@ -26,7 +26,10 @@ import HistoricoTransacoes from "../Pages/HistoricoTransacoes";
 
 // Componente Wrapper para Rotas Protegidas
 const ProtectedRoute = ({ user, children }) => {
-  return user ? children : <Navigate to="/login" replace />;
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  return children;
 };
 
 export default function AppRoutes() {
@@ -53,15 +56,15 @@ export default function AppRoutes() {
 
   return (
     <BrowserRouter>
-      {/* Navbar visível apenas para utilizadores autenticados */}
-      {user && <Navbar />}
+      {/* Navbar visível apenas para utilizadores autenticados com prop user */}
+      {user && <Navbar user={user} />}
 
-      <div className={user ? "pt-20 min-h-screen bg-gray-100" : "min-h-screen"}>
+      <div className={user ? "pt-16 min-h-screen bg-gray-100" : "min-h-screen"}>
         <Routes>
           {/* Rotas Públicas */}
-          <Route path="/" element={user ? <Navigate to="/home" /> : <Splash />} />
-          <Route path="/login" element={user ? <Navigate to="/home" /> : <Login />} />
-          <Route path="/register" element={user ? <Navigate to="/home" /> : <Register />} />
+          <Route path="/" element={user ? <Navigate to="/home" replace /> : <Splash />} />
+          <Route path="/login" element={user ? <Navigate to="/home" replace /> : <Login />} />
+          <Route path="/register" element={user ? <Navigate to="/home" replace /> : <Register />} />
 
           {/* Rotas Protegidas */}
           <Route path="/home" element={<ProtectedRoute user={user}><Home /></ProtectedRoute>} />
@@ -71,7 +74,7 @@ export default function AppRoutes() {
           {/* Perfis */}
           <Route path="/profile/:userId" element={<ProtectedRoute user={user}><Profile /></ProtectedRoute>} />
           <Route path="/perfil/:userId" element={<ProtectedRoute user={user}><Profile /></ProtectedRoute>} />
-          <Route path="/profile" element={user ? <Navigate to={`/profile/${user.uid}`} replace /> : <Navigate to="/login" />} />
+          <Route path="/profile" element={user ? <Navigate to={`/profile/${user.uid}`} replace /> : <Navigate to="/login" replace />} />
           <Route path="/edit-profile" element={<ProtectedRoute user={user}><EditProfile /></ProtectedRoute>} />
 
           {/* Pesquisa e Notificações */}
