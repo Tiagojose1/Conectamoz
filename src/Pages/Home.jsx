@@ -8,6 +8,7 @@ import CreatePost from "../Components/CreatePost";
 import StoriesBar from "../Components/StoriesBar";
 import ReelsFeed from "../Components/ReelsFeed";
 import PostCard from "../Components/PostCard";
+import SugestoesAmigos from "../Components/SugestoesAmigos";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("feed");
@@ -72,7 +73,10 @@ export default function Home() {
           {/* 2. Barra de Histórias */}
           <StoriesBar onOpenAddStory={() => alert("Abrir modal de novo Story")} />
 
-          {/* 3. Lista de Publicações do Feed */}
+          {/* 3. Sugestões de Novos Membros */}
+          <SugestoesAmigos />
+
+          {/* 4. Lista de Publicações do Feed */}
           {loading ? (
             <div className="text-center py-10 text-gray-500 font-medium animate-pulse">
               A carregar publicações...
