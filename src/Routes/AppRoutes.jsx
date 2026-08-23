@@ -21,9 +21,10 @@ import Profile from "../Pages/Profile";
 import EditProfile from "../Pages/EditProfile";
 import Search from "../Pages/Search";
 
-// Notificações e Posts
+// Notificações, Posts e Média
 import Notifications from "../Pages/Notifications";
 import PostDetail from "../Pages/PostDetail";
+import Editor from "../Pages/Editor";
 
 // Finanças e Serviços
 import Pagamento from "../Pages/Pagamento";
@@ -93,8 +94,9 @@ export default function AppRoutes() {
           <Route path="/notifications" element={<ProtectedRoute user={user}><Notifications /></ProtectedRoute>} />
           <Route path="/notificacoes" element={<Navigate to="/notifications" replace />} />
 
-          {/* Conteúdo e Detalhes */}
+          {/* Conteúdo e Ferramentas */}
           <Route path="/post/:id" element={<ProtectedRoute user={user}><PostDetail /></ProtectedRoute>} />
+          <Route path="/editor" element={<ProtectedRoute user={user}><Editor /></ProtectedRoute>} />
 
           {/* Finanças */}
           <Route path="/pagamento" element={<ProtectedRoute user={user}><Pagamento /></ProtectedRoute>} />
