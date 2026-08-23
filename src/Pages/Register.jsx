@@ -42,14 +42,18 @@ function Register() {
         senha
       );
 
-      await setDoc(doc(db, "usuarios", userCredential.user.uid), {
+      // Guardar utilizador na coleção "users"
+      await setDoc(doc(db, "users", userCredential.user.uid), {
         uid: userCredential.user.uid,
-        nome: nome,
+        displayName: nome,
         telefone: telefone,
         email: email,
-        fotoPerfil: "",
+        photoURL: "",
         biografia: "",
-        criadoEm: new Date().toISOString()
+        isPremium: false,             // Define por padrão conta grátis
+        bgRemovalsCount: 0,           // Controlo do limite diário de edição
+        lastResetDate: new Date().toISOString().split("T")[0],
+        createdAt: new Date().toISOString() // Utilizado para ordenar novos membros em SugestoesAmigos
       });
 
       setMensagem("Conta criada com sucesso! 🎉");
