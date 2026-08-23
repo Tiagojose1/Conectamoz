@@ -34,22 +34,24 @@ export default function CreatePostModal({ isOpen, onClose }) {
     setLoading(true);
 
     try {
-      let uploadedUrl = "";
+      let finalUrl = "";
 
-      // 1. Upload do ficheiro para o Cloudinary (em vez do Firebase Storage)
+      // 1. Upload do ficheiro para o Cloudinary
       if (mediaFile) {
-        uploadedUrl = await uploadParaCloudinary(mediaFile);
+        const uploadedData = await uploadParaCloudinary(mediaFile);
+        // Garante a extração da string da URL (mesmo se retornar objeto ou string)
+        finalUrl = typeof uploadedData === "object" ? uploadedData?.url : uploadedData;
       }
 
-      // 2. Salvar a publicação no Firestore com a URL gerada
+      // 2. Salvar a publicação no Firestore com a URL em texto plano
       await addDoc(collection(db, "posts"), {
         autorId: user?.uid || "",
         autorNome: user?.displayName || user?.email?.split("@")[0] || "Utilizador",
         autorFoto: user?.photoURL || "",
         conteudo: conteudo.trim(),
-        content: conteudo.trim(), // Garante compatibilidade caso o teu Feed leia "content"
-        imagemUrl: mediaType === "image" ? uploadedUrl : "",
-        videoUrl: mediaType === "video" ? uploadedUrl : "",
+        content: conteudo.trim(),
+        imagemUrl: mediaType === "image" ? finalUrl : "",
+        videoUrl: mediaType === "video" ? finalUrl : "",
         curtidas: [],
         comentarios: [],
         criadoEm: serverTimestamp(),
@@ -59,11 +61,11 @@ export default function CreatePostModal({ isOpen, onClose }) {
       setConteudo("");
       setMediaFile(null);
       setMediaType(null);
-      setLoading(false);
       onClose();
     } catch (error) {
-      console.error("Erro ao publicar:", error);
-      alert("Erro ao criar publicação. Tenta novamente!");
+      console.error("Erro detalhado ao publicar:", error);
+      alert("Erro ao criar publicação: " + (error.message || "Tenta novamente!"));
+    } finally {
       setLoading(false);
     }
   };

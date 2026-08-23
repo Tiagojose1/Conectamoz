@@ -1,14 +1,26 @@
 /**
- * Utilitário para upload de ficheiros (imagens e vídeos) para o Cloudinary
- * @param {File} file - Ficheiro selecionado pelo utilizador (e.target.files[0])
- * @returns {Promise<string>} - Retorna o URL direto do ficheiro alojado
+ * Utilitário para upload de ficheiros (imagens e vídeos) para o Cloudinary no ConectMoz (CMoz)
+ * @param {File} file - Ficheiro selecionado pelo utilizador (ex: e.target.files[0])
+ * @returns {Promise<{ url: string, duration?: number, publicId: string } | null>}
  */
 export const uploadParaCloudinary = async (file) => {
   if (!file) return null;
 
-  // Substitui pelos teus dados do painel do Cloudinary (Dashboard)
-  const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || "TEU_CLOUD_NAME";
-  const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_PRESET || "TEU_UPLOAD_PRESET";
+  // Carrega as variáveis de ambiente do Vite
+  const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
+  // Nome ajustado para corresponder exatamente ao ficheiro .env (VITE_CLOUDINARY_UPLOAD_PRESET)
+  const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+
+  // Validação preventiva das credenciais
+  if (!CLOUD_NAME) {
+    console.error("Cloudinary Error: VITE_CLOUDINARY_CLOUD_NAME não configurado no .env");
+    throw new Error("Configuração do Cloud Name pendente.");
+  }
+
+  if (!UPLOAD_PRESET) {
+    console.error("Cloudinary Error: VITE_CLOUDINARY_UPLOAD_PRESET não configurado no .env");
+    throw new Error("Upload Preset do Cloudinary não configurado.");
+  }
 
   // Determina se o ficheiro é uma imagem ou vídeo
   const isVideo = file.type.startsWith("video/");
@@ -29,14 +41,21 @@ export const uploadParaCloudinary = async (file) => {
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("Erro no Cloudinary:", errorData);
-      throw new Error("Falha ao carregar o ficheiro no Cloudinary.");
+      console.error("Resposta de erro do Cloudinary:", errorData);
+      throw new Error(errorData.error?.message || "Falha ao carregar o ficheiro no Cloudinary.");
     }
 
     const data = await response.json();
-    return data.secure_url; // Retorna o link HTTPS da imagem/vídeo
+
+    // Retorna a URL segura e os metadados do ficheiro
+    return {
+      url: data.secure_url,
+      publicId: data.public_id,
+      duration: data.duration || null, // Duração em segundos (se for vídeo)
+      format: data.format,
+    };
   } catch (error) {
-    console.error("Erro no upload para o Cloudinary:", error);
+    console.error("Erro no processo de upload para o Cloudinary:", error);
     throw error;
   }
 };
