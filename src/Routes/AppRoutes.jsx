@@ -11,7 +11,7 @@ import Splash from "../Pages/Splash";
 import Login from "../Pages/Login";
 import Register from "../Pages/Register";
 
-// Páginas Principais (Feed, Vagas, Chat)
+// Páginas Principais
 import Home from "../Pages/Home";
 import Jobs from "../Pages/Jobs";
 import Chat from "../Pages/Chat";
@@ -25,7 +25,7 @@ import Search from "../Pages/Search";
 import Notifications from "../Pages/Notifications";
 import PostDetail from "../Pages/PostDetail";
 
-// Finanças e Serviços (M-Pesa / e-Mola)
+// Finanças e Serviços
 import Pagamento from "../Pages/Pagamento";
 import HistoricoTransacoes from "../Pages/HistoricoTransacoes";
 
@@ -38,7 +38,7 @@ const ProtectedRoute = ({ user, children }) => {
   return children;
 };
 
-// Guardião para Bloquear Acesso a Login/Register a Utilizadores Autenticados
+// Guardião para Bloquear Acesso a Login/Register se Autenticado
 const PublicOnlyRoute = ({ user, children }) => {
   if (user) return <Navigate to="/home" replace />;
   return children;
@@ -72,38 +72,38 @@ export default function AppRoutes() {
 
       <main className={user ? "pt-16 min-h-screen bg-gray-100" : "min-h-screen"}>
         <Routes>
-          {/* --- ROTAS PÚBLICAS --- */}
+          {/* Rotas Públicas */}
           <Route path="/" element={<PublicOnlyRoute user={user}><Splash /></PublicOnlyRoute>} />
           <Route path="/login" element={<PublicOnlyRoute user={user}><Login /></PublicOnlyRoute>} />
           <Route path="/register" element={<PublicOnlyRoute user={user}><Register /></PublicOnlyRoute>} />
 
-          {/* --- NAVEGAÇÃO PRINCIPAL --- */}
+          {/* Navegação Principal */}
           <Route path="/home" element={<ProtectedRoute user={user}><Home /></ProtectedRoute>} />
           <Route path="/jobs" element={<ProtectedRoute user={user}><Jobs /></ProtectedRoute>} />
           <Route path="/chat" element={<ProtectedRoute user={user}><Chat /></ProtectedRoute>} />
 
-          {/* --- GESTÃO DE PERFIL --- */}
+          {/* Gestão de Perfil */}
           <Route path="/profile/:userId" element={<ProtectedRoute user={user}><Profile /></ProtectedRoute>} />
           <Route path="/perfil/:userId" element={<ProtectedRoute user={user}><Profile /></ProtectedRoute>} />
           <Route path="/profile" element={user ? <Navigate to={`/profile/${user.uid}`} replace /> : <Navigate to="/login" replace />} />
           <Route path="/edit-profile" element={<ProtectedRoute user={user}><EditProfile /></ProtectedRoute>} />
 
-          {/* --- PESQUISA E CONEXÕES --- */}
+          {/* Pesquisa e Conexões */}
           <Route path="/search" element={<ProtectedRoute user={user}><Search /></ProtectedRoute>} />
           <Route path="/notifications" element={<ProtectedRoute user={user}><Notifications /></ProtectedRoute>} />
           <Route path="/notificacoes" element={<Navigate to="/notifications" replace />} />
 
-          {/* --- CONTEÚDO E DETALHES --- */}
+          {/* Conteúdo e Detalhes */}
           <Route path="/post/:id" element={<ProtectedRoute user={user}><PostDetail /></ProtectedRoute>} />
 
-          {/* --- FINANÇAS (M-PESA / E-MOLA) --- */}
+          {/* Finanças */}
           <Route path="/pagamento" element={<ProtectedRoute user={user}><Pagamento /></ProtectedRoute>} />
           <Route path="/historico-transacoes" element={<ProtectedRoute user={user}><HistoricoTransacoes /></ProtectedRoute>} />
 
-          {/* --- ADMINISTRAÇÃO --- */}
+          {/* Administração */}
           <Route path="/admin" element={<ProtectedRoute user={user}><Admin /></ProtectedRoute>} />
 
-          {/* --- FALLBACK PARA ROTAS INEXISTENTES --- */}
+          {/* Fallback */}
           <Route path="*" element={<Navigate to={user ? "/home" : "/"} replace />} />
         </Routes>
       </main>
