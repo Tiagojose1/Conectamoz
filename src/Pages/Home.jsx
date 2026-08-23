@@ -4,7 +4,7 @@ import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
 
 // Componentes da Interface
 import BottomNavigation from "../Components/BottomNavigation";
-import CreatePost from "../Components/CreatePost";
+import CreatePostModal from "../Components/CreatePostModal"; // Importado o Modal correto
 import StoriesBar from "../Components/StoriesBar";
 import ReelsFeed from "../Components/ReelsFeed";
 import PostCard from "../Components/PostCard";
@@ -14,6 +14,8 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("feed");
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false); // Estado para controlar o Modal
+
   const user = auth.currentUser;
 
   useEffect(() => {
@@ -38,6 +40,12 @@ export default function Home() {
 
     return () => unsubscribe();
   }, []);
+
+  const userInitial = user?.displayName
+    ? user.displayName[0].toUpperCase()
+    : user?.email
+    ? user.email[0].toUpperCase()
+    : "U";
 
   return (
     <div className="min-h-screen bg-gray-100 pb-24">
@@ -67,8 +75,29 @@ export default function Home() {
 
       {activeTab === "feed" ? (
         <main className="max-w-xl mx-auto px-2 sm:px-4 mt-2">
-          {/* 1. Caixa de Criar Novo Post */}
-          <CreatePost user={user} />
+          {/* 1. Botão/Caixa para abrir o Modal de Novo Post */}
+          <div className="bg-white rounded-2xl shadow p-3 border mb-4">
+            <div className="flex items-center gap-3">
+              {user?.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  alt="Perfil"
+                  className="w-10 h-10 rounded-full object-cover border"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">
+                  {userInitial}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(true)}
+                className="w-full text-left bg-gray-100 hover:bg-gray-200 text-gray-500 py-2.5 px-4 rounded-full text-sm font-medium transition"
+              >
+                Em que estás a pensar, {user?.displayName || "amigo"}?
+              </button>
+            </div>
+          </div>
 
           {/* 2. Barra de Histórias */}
           <StoriesBar onOpenAddStory={() => alert("Abrir modal de novo Story")} />
@@ -106,6 +135,12 @@ export default function Home() {
               ))}
             </div>
           )}
+
+          {/* Modal de Criar Post */}
+          <CreatePostModal
+            isOpen={isModalOpen}
+            onClose={() => setIsModalOpen(false)}
+          />
         </main>
       ) : (
         /* Renderiza o Feed de Reels em ecrã/aba própria */

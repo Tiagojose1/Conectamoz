@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { db, auth, storage } from "../firebase";
+import { db, auth } from "../firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import { uploadParaCloudinary } from "../Utils/Cloudinary";
 import { FaImage, FaVideo, FaSpinner, FaTrash } from "react-icons/fa";
 
 export default function CreatePost({ onPostCreated }) {
@@ -9,18 +9,12 @@ export default function CreatePost({ onPostCreated }) {
   const [mediaFile, setMediaFile] = useState(null);
   const [mediaType, setMediaType] = useState(null); // "image" ou "video"
   const [loading, setLoading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
 
   const user = auth.currentUser;
 
   const handleFileChange = (e, type) => {
     const file = e.target.files[0];
     if (file) {
-      // Limite opcional: Avisar se o vídeo for maior que 50MB
-      if (type === "video" && file.size > 50 * 1024 * 1024) {
-        alert("O vídeo é muito grande! Escolha um vídeo menor que 50MB.");
-        return;
-      }
       setMediaFile(file);
       setMediaType(type);
     }
@@ -29,7 +23,6 @@ export default function CreatePost({ onPostCreated }) {
   const handleRemoveMedia = () => {
     setMediaFile(null);
     setMediaType(null);
-    setUploadProgress(0);
   };
 
   const handlePublish = async (e) => {
@@ -42,65 +35,40 @@ export default function CreatePost({ onPostCreated }) {
     }
 
     setLoading(true);
-    setUploadProgress(0);
 
     try {
-      let mediaUrl = "";
+      let finalUrl = "";
 
+      // 1. Upload para o Cloudinary em vez do Firebase Storage
       if (mediaFile) {
-        const folder = mediaType === "video" ? "videos" : "images";
-        const fileName = `posts/${folder}/${user.uid}_${Date.now()}_${mediaFile.name}`;
-        const storageRef = ref(storage, fileName);
-
-        // Upload com progresso (Resumable Upload)
-        const uploadTask = uploadBytesResumable(storageRef, mediaFile);
-
-        await new Promise((resolve, reject) => {
-          uploadTask.on(
-            "state_changed",
-            (snapshot) => {
-              const progress = Math.round(
-                (snapshot.bytesTransferred / snapshot.totalBytes) * 100
-              );
-              setUploadProgress(progress);
-              console.log(`Upload está a ${progress}%`);
-            },
-            (error) => {
-              console.error("Erro no Upload do Firebase Storage:", error);
-              reject(error);
-            },
-            async () => {
-              mediaUrl = await getDownloadURL(uploadTask.snapshot.ref);
-              resolve();
-            }
-          );
-        });
+        const uploadedData = await uploadParaCloudinary(mediaFile);
+        // Garante extração correta da URL texto plano
+        finalUrl = typeof uploadedData === "object" ? uploadedData?.url : uploadedData;
       }
 
-      // Guardar a publicação no Firestore
+      // 2. Salvar publicação no Firestore
       await addDoc(collection(db, "posts"), {
         autorId: user.uid,
         autorNome: user.displayName || user.email?.split("@")[0] || "Utilizador",
         autorFoto: user.photoURL || "",
         conteudo: conteudo.trim(),
-        imagemUrl: mediaType === "image" ? mediaUrl : "",
-        videoUrl: mediaType === "video" ? mediaUrl : "",
+        imagemUrl: mediaType === "image" ? finalUrl : "",
+        videoUrl: mediaType === "video" ? finalUrl : "",
         curtidas: [],
         comentarios: [],
         criadoEm: serverTimestamp(),
       });
 
-      // Limpar formulário
+      // 3. Limpar formulário
       setConteudo("");
       setMediaFile(null);
       setMediaType(null);
-      setLoading(false);
-      setUploadProgress(0);
 
       if (onPostCreated) onPostCreated();
     } catch (error) {
       console.error("Erro detalhado ao publicar:", error);
-      alert(`Falha ao publicar: ${error.message || "Verifique a ligação ou as permissões do Firebase."}`);
+      alert(`Falha ao publicar: ${error.message || "Erro de ligação ao Cloudinary."}`);
+    } finally {
       setLoading(false);
     }
   };
@@ -203,7 +171,7 @@ export default function CreatePost({ onPostCreated }) {
           {loading ? (
             <>
               <FaSpinner className="animate-spin" />
-              <span>{uploadProgress > 0 ? `${uploadProgress}%` : "A publicar..."}</span>
+              <span>A publicar...</span>
             </>
           ) : (
             "Publicar"
