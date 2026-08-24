@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { 
   FaHome, 
@@ -8,6 +8,7 @@ import {
   FaPlus, 
   FaSearch, 
   FaComments, 
+  FaBell,
   FaBars, 
   FaTimes,
   FaEdit,
@@ -33,8 +34,10 @@ import {
   FaThLarge,
   FaRobot
 } from "react-icons/fa";
-import { auth } from "../firebase";
+import { auth, db } from "../firebase";
 import { signOut } from "firebase/auth";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import NotificacoesPedidos from "./NotificacoesPedidos";
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -43,12 +46,33 @@ export default function Navbar() {
   // Estados para abrir/fechar menus
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [showSidebarMenu, setShowSidebarMenu] = useState(false);
+  const [showNotifMenu, setShowNotifMenu] = useState(false);
+
+  // Contador em tempo real para o Badge do Sino
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Acordeões do Menu Lateral
   const [openHelp, setOpenHelp] = useState(false);
   const [openSettings, setOpenSettings] = useState(false);
 
   const user = auth.currentUser;
+
+  // Escuta no Firestore para contar os pedidos pendentes
+  useEffect(() => {
+    if (!user) return;
+
+    const q = query(
+      collection(db, "friend_requests"),
+      where("destinatarioId", "==", user.uid),
+      where("status", "==", "pendente")
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setUnreadCount(snapshot.docs.length);
+    }, (err) => console.error("Erro ao carregar contagem:", err));
+
+    return () => unsubscribe();
+  }, [user]);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -75,6 +99,7 @@ export default function Navbar() {
               onClick={() => {
                 setShowCreateMenu(!showCreateMenu);
                 setShowSidebarMenu(false);
+                setShowNotifMenu(false);
               }}
               className="w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-800 transition"
               title="Criar"
@@ -105,7 +130,7 @@ export default function Navbar() {
           </div>
         </div>
 
-        {/* Lado Direito: Pesquisa, Mensagens, Menu 3 Traços */}
+        {/* Lado Direito: Pesquisa, Mensagens, Notificações, Menu 3 Traços */}
         <div className="flex items-center gap-2">
           <button onClick={() => navigate("/search")} className="w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-800 transition">
             <FaSearch size={16} />
@@ -115,10 +140,38 @@ export default function Navbar() {
             <FaComments size={16} />
           </button>
 
+          {/* Botão de Notificações com Contador */}
+          <div className="relative">
+            <button 
+              onClick={() => {
+                setShowNotifMenu(!showNotifMenu);
+                setShowCreateMenu(false);
+                setShowSidebarMenu(false);
+              }} 
+              className="w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-800 transition relative"
+              title="Notificações"
+            >
+              <FaBell size={16} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-pulse">
+                  {unreadCount > 9 ? "9+" : unreadCount}
+                </span>
+              )}
+            </button>
+
+            {/* Dropdown com Ficheiro NotificacoesPedidos.jsx */}
+            {showNotifMenu && (
+              <div className="absolute right-0 mt-2 w-80 md:w-96 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden">
+                <NotificacoesPedidos />
+              </div>
+            )}
+          </div>
+
           <button 
             onClick={() => {
               setShowSidebarMenu(!showSidebarMenu);
               setShowCreateMenu(false);
+              setShowNotifMenu(false);
             }}
             className="w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-800 transition"
           >

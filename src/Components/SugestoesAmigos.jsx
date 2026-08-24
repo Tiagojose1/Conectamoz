@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db, auth } from "../firebase";
-import { collection, query, orderBy, limit, getDocs } from "firebase/firestore";
+import { collection, limit, getDocs } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 
 function SugestoesAmigos() {
@@ -14,22 +14,28 @@ function SugestoesAmigos() {
         const userAtual = auth.currentUser;
         const usersRef = collection(db, "users");
 
-        const q = query(
-          usersRef,
-          orderBy("createdAt", "desc"),
-          limit(10)
-        );
-
-        const querySnapshot = await getDocs(q);
+        // Busca até 15 utilizadores
+        const querySnapshot = await getDocs(usersRef);
         const listaUtilizadores = [];
 
         querySnapshot.forEach((docSnap) => {
-          if (userAtual && docSnap.id !== userAtual.uid) {
-            listaUtilizadores.push({ id: docSnap.id, ...docSnap.data() });
+          const data = docSnap.data();
+          const docId = docSnap.id;
+
+          // Filtra para remover o próprio usuário autenticado
+          if (userAtual && docId !== userAtual.uid && data.uid !== userAtual.uid) {
+            listaUtilizadores.push({
+              id: docId,
+              displayName: data.displayName || data.nome || "Membro ConectMoz",
+              photoURL: data.photoURL || null,
+              isPremium: data.isPremium || false,
+              ...data,
+            });
           }
         });
 
-        setNovosMembros(listaUtilizadores);
+        // Limita a exibição para até 10 membros
+        setNovosMembros(listaUtilizadores.slice(0, 10));
       } catch (error) {
         console.error("Erro ao carregar sugestões:", error);
       } finally {
@@ -48,7 +54,7 @@ function SugestoesAmigos() {
     <div className="bg-white p-4 rounded-xl shadow-md w-full my-4 border">
       <h2 className="text-base font-bold text-gray-800 mb-3 flex items-center justify-between">
         <span>Novos Membros no ConectMoz 🌟</span>
-        <span className="text-xs font-normal text-blue-600 cursor-pointer" onClick={() => navigate("/search")}>
+        <span className="text-xs font-normal text-blue-600 cursor-pointer hover:underline" onClick={() => navigate("/search")}>
           Ver todos
         </span>
       </h2>
@@ -64,13 +70,13 @@ function SugestoesAmigos() {
                 onClick={() => navigate(`/profile/${membro.id}`)}
               >
                 <img
-                  src={membro.photoURL || "https://via.placeholder.com/40"}
-                  alt={membro.displayName || "Membro"}
+                  src={membro.photoURL || "/default-avatar.png"}
+                  alt={membro.displayName}
                   className="w-10 h-10 rounded-full object-cover border"
                 />
                 <div>
                   <h4 className="text-sm font-semibold text-gray-800 leading-none">
-                    {membro.displayName || "Membro ConectMoz"}
+                    {membro.displayName}
                   </h4>
                   <p className="text-xs text-gray-500 mt-1">
                     {membro.isPremium ? "Membro VIP 👑" : "Novo no ConectMoz"}

@@ -4,7 +4,7 @@ import { collection, getDocs, addDoc, serverTimestamp } from "firebase/firestore
 import { useNavigate } from "react-router-dom";
 import Navbar from "../Components/Navbar";
 import BottomNavigation from "../Components/BottomNavigation";
-import SearchBar from "../Components/SearchBar"; // Importando o teu componente
+import SearchBar from "../Components/SearchBar";
 import { FaComments } from "react-icons/fa";
 
 export default function Search() {
@@ -16,14 +16,24 @@ export default function Search() {
   const [usuariosFiltrados, setUsuariosFiltrados] = useState([]);
   const [carregando, setCarregando] = useState(true);
 
-  // Carregar todos os utilizadores (exceto o próprio)
+  // Carregar utilizadores
   useEffect(() => {
     const carregarUsuarios = async () => {
       try {
         const querySnapshot = await getDocs(collection(db, "users"));
         const lista = querySnapshot.docs
-          .map((doc) => ({ id: doc.id, ...doc.data() }))
-          .filter((u) => u.uid !== currentUser?.uid);
+          .map((doc) => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              uid: data.uid || doc.id,
+              nome: data.displayName || data.nome || data.email?.split("@")[0] || "Usuário",
+              email: data.email || "",
+              photoURL: data.photoURL || null,
+              ...data,
+            };
+          })
+          .filter((u) => u.uid !== currentUser?.uid && u.id !== currentUser?.uid);
 
         setTodosUsuarios(lista);
         setUsuariosFiltrados(lista);
@@ -37,12 +47,12 @@ export default function Search() {
     carregarUsuarios();
   }, [currentUser]);
 
-  // Filtrar utilizadores conforme o texto digitado
+  // Filtrar utilizadores conforme digitação
   useEffect(() => {
     if (!busca.trim()) {
       setUsuariosFiltrados(todosUsuarios);
     } else {
-      const termo = busca.toLowerCase();
+      const termo = busca.toLowerCase().trim();
       const filtrados = todosUsuarios.filter(
         (u) =>
           (u.nome && u.nome.toLowerCase().includes(termo)) ||
@@ -52,7 +62,6 @@ export default function Search() {
     }
   }, [busca, todosUsuarios]);
 
-  // Abrir ou criar conversa direta no Chat
   const handleIniciarConversa = async (outroUsuario) => {
     if (!currentUser) return;
 
@@ -81,14 +90,12 @@ export default function Search() {
       <Navbar user={currentUser} />
 
       <main className="max-w-xl mx-auto pt-4 px-4 space-y-4">
-        {/* Usando o Componente SearchBar aqui */}
         <SearchBar 
           value={busca} 
           onChange={(e) => setBusca(e.target.value)} 
           placeholder="Pesquisar por nome ou email..." 
         />
 
-        {/* Resultados da Pesquisa */}
         <div className="space-y-2">
           <h2 className="text-xs font-bold text-gray-500 uppercase px-1">
             {busca ? `Resultados (${usuariosFiltrados.length})` : "Utilizadores Sugeridos"}
@@ -105,7 +112,7 @@ export default function Search() {
           ) : (
             usuariosFiltrados.map((u) => (
               <div
-                key={u.id || u.uid}
+                key={u.id}
                 className="bg-white p-3 rounded-xl border shadow-sm flex items-center justify-between gap-3 hover:border-blue-300 transition"
               >
                 <div className="flex items-center gap-3">
@@ -122,9 +129,7 @@ export default function Search() {
                   )}
 
                   <div>
-                    <h3 className="font-bold text-sm text-gray-800">
-                      {u.nome || u.email.split("@")[0]}
-                    </h3>
+                    <h3 className="font-bold text-sm text-gray-800">{u.nome}</h3>
                     <p className="text-xs text-gray-400">{u.email}</p>
                   </div>
                 </div>
