@@ -1,3 +1,4 @@
+// src/Pages/Profile.jsx
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { db, auth, storage } from "../firebase";
@@ -65,7 +66,7 @@ export default function Profile() {
         setPosts(userPosts);
       } catch (err) {
         console.error("Erro ao carregar perfil:", err);
-      } font-medium {
+      } finally {
         setCarregando(false);
       }
     };
