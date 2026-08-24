@@ -120,7 +120,7 @@ export default function ListaAmigos({ userId }) {
                 </div>
               </Link>
 
-              {/* Botão Direto para Abrir Conversa no Chat */}
+              {/* Botão para Abrir Conversa no Chat */}
               <button
                 onClick={() => navigate(`/chat/${amigo.id}`)}
                 className="p-2.5 ml-2 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white rounded-xl transition flex-shrink-0"

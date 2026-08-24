@@ -10,7 +10,7 @@ import {
   recusarPedidoAmizade,
   removerAmigo
 } from "../services/friendRequestsService";
-import ListaAmigos from "../components/ListaAmigos";
+import ListaAmigos from "../Components/ListaAmigos";
 import { 
   FaUserPlus, 
   FaUserTimes, 
@@ -222,7 +222,7 @@ export default function UserProfile() {
         )}
       </div>
 
-      {/* Componente da Lista de Amigos do Perfil */}
+      {/* Lista de Amigos */}
       <ListaAmigos userId={perfilId} />
     </div>
   );
