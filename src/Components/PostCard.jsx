@@ -15,8 +15,7 @@ import {
 import { criarNotificacao } from "../Utils/Notifications";
 
 import {
-  FaThumbsUp,
-  FaRegThumbsUp,
+  FaHeart,
   FaComment,
   FaPaperPlane,
   FaEllipsisV,
@@ -25,7 +24,9 @@ import {
   FaExclamationTriangle,
   FaCheck,
   FaTimes,
-  FaShareAlt
+  FaShareAlt,
+  FaVolumeMute,
+  FaVolumeUp
 } from "react-icons/fa";
 
 export default function PostCard({
@@ -41,32 +42,63 @@ export default function PostCard({
 }) {
   const navigate = useNavigate();
   const user = auth.currentUser;
-  const isLiked = user ? likes.includes(user.uid) : false;
   const isMyPost = user && user.uid === autorId;
 
   // Estados do Post e Comentários
+  const [curtidas, setCurtidas] = useState(likes);
   const [mostrarComentarios, setMostrarComentarios] = useState(false);
   const [listaComentarios, setListaComentarios] = useState(comentarios);
   const [novoComentario, setNovoComentario] = useState("");
   const [aCarregarComentario, setACarregarComentario] = useState(false);
 
-  // Sincronizar estado local de comentários se as props mudarem
+  // Novos Estados Visuais e de Interação (Fase 1 e 2)
+  const [mostrarReacoes, setMostrarReacoes] = useState(false);
+  const [coracaoAnimado, setCoracaoAnimado] = useState(false);
+  const [semSom, setSemSom] = useState(true);
+
+  // Lista de Reações Dinâmicas
+  const listaReacoes = [
+    { emoji: "❤️", nome: "Gosto" },
+    { emoji: "😂", nome: "Riso" },
+    { emoji: "😮", nome: "Uau" },
+    { emoji: "😢", nome: "Triste" },
+    { emoji: "😡", nome: "Zangado" },
+    { emoji: "🔥", nome: "Fogo" },
+  ];
+
+  // Identificar a reação do utilizador atual
+  const minhaReacaoObj = user
+    ? curtidas.find((c) => (typeof c === "object" ? c.uid === user.uid : c === user.uid))
+    : null;
+  const minhaReacaoEmoji = minhaReacaoObj
+    ? typeof minhaReacaoObj === "object"
+      ? minhaReacaoObj.emoji
+      : "❤️"
+    : null;
+
+  // Otimizador de Mídia Cloudinary para conexões mais lentas
+  const otimizarUrl = (url, opts = "f_auto,q_auto") => {
+    if (!url || !url.includes("cloudinary.com")) return url;
+    return url.replace("/upload/", `/upload/${opts}/`);
+  };
+
   useEffect(() => {
     setListaComentarios(comentarios);
   }, [comentarios]);
+
+  useEffect(() => {
+    setCurtidas(likes);
+  }, [likes]);
 
   // Estados do Menu e Edição/Eliminação
   const [showMenu, setShowMenu] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [textoEditado, setTextoEditado] = useState(content || "");
   const [carregandoAcao, setCarregandoAcao] = useState(false);
-
-  // Estado de aviso ao copiar link
   const [copiado, setCopiado] = useState(false);
 
   const menuRef = useRef(null);
 
-  // Fechar o menu dropdown ao clicar fora
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
@@ -77,17 +109,12 @@ export default function PostCard({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Navegar para o perfil do autor
   const handleIrParaPerfil = () => {
-    if (autorId) {
-      navigate(`/perfil/${autorId}`);
-    }
+    if (autorId) navigate(`/perfil/${autorId}`);
   };
 
-  // Copiar link do post ou partilhar
   const handlePartilhar = async () => {
     const linkPost = `${window.location.origin}/post/${id}`;
-
     try {
       if (navigator.share) {
         await navigator.share({
@@ -105,10 +132,8 @@ export default function PostCard({
     }
   };
 
-  // Guardar edição do post
   const handleGuardarEdicao = async () => {
     if (!textoEditado.trim()) return;
-
     try {
       setCarregandoAcao(true);
       const postRef = doc(db, "posts", id);
@@ -126,11 +151,9 @@ export default function PostCard({
     }
   };
 
-  // Eliminar post
   const handleEliminarPost = async () => {
     setShowMenu(false);
     if (!window.confirm("Tens a certeza que queres eliminar este post?")) return;
-
     try {
       setCarregandoAcao(true);
       await deleteDoc(doc(db, "posts", id));
@@ -142,10 +165,8 @@ export default function PostCard({
     }
   };
 
-  // Denunciar post
   const handleDenunciarPost = async () => {
     setShowMenu(false);
-
     const motivo = window.prompt("Descreve o motivo da denúncia (ex: spam, conteúdo impróprio):");
     if (!motivo || !motivo.trim()) return;
 
@@ -160,7 +181,6 @@ export default function PostCard({
         status: "pendente",
         criadoEm: serverTimestamp()
       });
-
       alert("Denúncia enviada para análise. Obrigado!");
     } catch (error) {
       console.error("Erro ao enviar denúncia:", error);
@@ -170,20 +190,30 @@ export default function PostCard({
     }
   };
 
-  // Função para dar/tirar Gosto
-  const handleLike = async () => {
-    if (!user) return;
+  // Função Avançada de Reação (Gosto e Emojis)
+  const handleReagir = async (emojiEscolhido = "❤️") => {
+    if (!user) return alert("Precisas de iniciar sessão para interagir!");
+
     const postRef = doc(db, "posts", id);
+    let novasCurtidas = [...curtidas];
 
     try {
-      if (isLiked) {
+      if (minhaReacaoEmoji) {
+        // Remover Reação
+        novasCurtidas = novasCurtidas.filter((c) =>
+          typeof c === "object" ? c.uid !== user.uid : c !== user.uid
+        );
         await updateDoc(postRef, {
-          curtidas: arrayRemove(user.uid),
+          curtidas: novasCurtidas,
           likes: arrayRemove(user.uid)
         });
       } else {
+        // Adicionar Reação
+        const novoObjeto = { uid: user.uid, emoji: emojiEscolhido };
+        novasCurtidas.push(novoObjeto);
+
         await updateDoc(postRef, {
-          curtidas: arrayUnion(user.uid),
+          curtidas: arrayUnion(novoObjeto),
           likes: arrayUnion(user.uid)
         });
 
@@ -200,12 +230,24 @@ export default function PostCard({
           });
         }
       }
+
+      setCurtidas(novasCurtidas);
+      setMostrarReacoes(false);
     } catch (error) {
-      console.error("Erro ao atualizar curtida:", error);
+      console.error("Erro ao reagir ao post:", error);
     }
   };
 
-  // Adicionar Comentário
+  // Duplo Toque no Ecrã (Double-Tap)
+  const handleDoubleTap = () => {
+    setCoracaoAnimado(true);
+    setTimeout(() => setCoracaoAnimado(false), 800);
+
+    if (!minhaReacaoEmoji) {
+      handleReagir("❤️");
+    }
+  };
+
   const handleAddComment = async (e) => {
     e.preventDefault();
     if (!novoComentario.trim() || !user) return;
@@ -250,7 +292,6 @@ export default function PostCard({
     }
   };
 
-  // Eliminar Comentário Individual
   const handleEliminarComentario = async (comentarioParaRemover) => {
     if (!window.confirm("Queres mesmo apagar este comentário?")) return;
 
@@ -269,19 +310,15 @@ export default function PostCard({
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-4 overflow-hidden relative">
-      {/* Alerta de Link Copiado */}
       {copiado && (
-        <div className="absolute top-2 right-12 bg-gray-900 text-white text-xs px-3 py-1.5 rounded-lg shadow-md z-20 animate-fade-in">
+        <div className="absolute top-2 right-12 bg-gray-900 text-white text-xs px-3 py-1.5 rounded-lg shadow-md z-20">
           Link copiado!
         </div>
       )}
 
       {/* Cabeçalho do Post */}
       <div className="flex items-center justify-between p-4 border-b border-gray-50">
-        <div
-          onClick={handleIrParaPerfil}
-          className="flex items-center gap-3 cursor-pointer group"
-        >
+        <div onClick={handleIrParaPerfil} className="flex items-center gap-3 cursor-pointer group">
           {autorFoto ? (
             <img
               src={autorFoto}
@@ -301,19 +338,16 @@ export default function PostCard({
           </div>
         </div>
 
-        {/* Menu de Três Pontos */}
         {user && (
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowMenu(!showMenu)}
               disabled={carregandoAcao}
               className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition"
-              title="Opções"
             >
               <FaEllipsisV size={14} />
             </button>
 
-            {/* Dropdown Options */}
             {showMenu && (
               <div className="absolute right-0 mt-1 w-36 bg-white border border-gray-100 rounded-xl shadow-lg py-1 z-10">
                 {isMyPost ? (
@@ -325,15 +359,13 @@ export default function PostCard({
                       }}
                       className="w-full text-left px-3.5 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                     >
-                      <FaEdit className="text-blue-500" size={13} />
-                      Editar
+                      <FaEdit className="text-blue-500" size={13} /> Editar
                     </button>
                     <button
                       onClick={handleEliminarPost}
                       className="w-full text-left px-3.5 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"
                     >
-                      <FaTrash size={13} />
-                      Eliminar
+                      <FaTrash size={13} /> Eliminar
                     </button>
                   </>
                 ) : (
@@ -341,8 +373,7 @@ export default function PostCard({
                     onClick={handleDenunciarPost}
                     className="w-full text-left px-3.5 py-2 text-xs text-amber-600 hover:bg-amber-50 flex items-center gap-2"
                   >
-                    <FaExclamationTriangle size={13} />
-                    Denunciar
+                    <FaExclamationTriangle size={13} /> Denunciar
                   </button>
                 )}
               </div>
@@ -351,7 +382,7 @@ export default function PostCard({
         )}
       </div>
 
-      {/* Conteúdo do Post / Edição */}
+      {/* Conteúdo de Texto ou Modo de Edição */}
       {isEditing ? (
         <div className="p-4 space-y-2 bg-gray-50 border-b">
           <textarea
@@ -385,38 +416,89 @@ export default function PostCard({
         )
       )}
 
-      {/* Imagem em Anexo */}
-      {imagemUrl && (
-        <div className="w-full bg-black/5 max-h-96 flex justify-center items-center overflow-hidden">
-          <img src={imagemUrl} alt="Publicação" className="w-full object-cover max-h-96" />
-        </div>
-      )}
+      {/* Mídia com Suporte a Double-Tap e Otimização Cloudinary */}
+      <div className="relative bg-black flex justify-center items-center overflow-hidden" onDoubleClick={handleDoubleTap}>
+        {imagemUrl && (
+          <img
+            src={otimizarUrl(imagemUrl)}
+            alt="Publicação"
+            className="w-full max-h-96 object-cover cursor-pointer select-none"
+            loading="lazy"
+          />
+        )}
 
-      {/* Vídeo em Anexo */}
-      {videoUrl && (
-        <div className="w-full bg-black max-h-96 flex justify-center items-center">
-          <video src={videoUrl} controls className="w-full max-h-96" />
-        </div>
-      )}
+        {videoUrl && (
+          <div className="relative w-full max-h-96 flex justify-center items-center">
+            <video
+              src={otimizarUrl(videoUrl)}
+              controls
+              muted={semSom}
+              className="w-full max-h-96 object-cover"
+              loop
+              playsInline
+            />
+            <button
+              onClick={() => setSemSom(!semSom)}
+              className="absolute bottom-3 right-3 bg-black/60 text-white p-2 rounded-full hover:bg-black transition z-10"
+            >
+              {semSom ? <FaVolumeMute size={14} /> : <FaVolumeUp size={14} />}
+            </button>
+          </div>
+        )}
 
-      {/* Contador de Reações */}
+        {/* Animação de Coração em Duplo Toque */}
+        {coracaoAnimado && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none animate-ping">
+            <FaHeart className="text-red-500 text-8xl drop-shadow-lg" />
+          </div>
+        )}
+      </div>
+
+      {/* Contador de Reações e Comentários */}
       <div className="flex items-center justify-between px-4 py-2 border-t text-xs text-gray-500">
-        <span>{likes.length} gostos</span>
+        <div className="flex items-center gap-1">
+          <span className="flex -space-x-1">
+            <span className="bg-red-500 text-white text-[10px] p-0.5 rounded-full">❤️</span>
+            <span className="bg-amber-400 text-white text-[10px] p-0.5 rounded-full">😂</span>
+          </span>
+          <span className="ml-1 font-medium">{curtidas.length} reações</span>
+        </div>
+
         <button onClick={() => setMostrarComentarios(!mostrarComentarios)} className="hover:underline">
           {listaComentarios.length} comentários
         </button>
       </div>
 
-      {/* Botões de Ação */}
-      <div className="flex border-t border-b border-gray-100 text-gray-600 font-medium text-xs">
+      {/* Botões de Ação com Bar de Emojis */}
+      <div className="flex border-t border-b border-gray-100 text-gray-600 font-medium text-xs relative">
+        {/* Pop-up de Emojis ao passar o cursor ou ao clicar no botão */}
+        {mostrarReacoes && (
+          <div
+            onMouseLeave={() => setMostrarReacoes(false)}
+            className="absolute -top-11 left-4 bg-white border border-gray-200 shadow-xl rounded-full px-3 py-1.5 flex items-center gap-2 animate-bounce z-20"
+          >
+            {listaReacoes.map((item) => (
+              <button
+                key={item.nome}
+                onClick={() => handleReagir(item.emoji)}
+                className="text-xl hover:scale-125 transition-transform"
+                title={item.nome}
+              >
+                {item.emoji}
+              </button>
+            ))}
+          </div>
+        )}
+
         <button
-          onClick={handleLike}
+          onClick={() => handleReagir(minhaReacaoEmoji || "❤️")}
+          onMouseEnter={() => setMostrarReacoes(true)}
           className={`flex-1 py-2.5 flex items-center justify-center gap-2 hover:bg-gray-50 transition ${
-            isLiked ? "text-blue-600 font-bold" : ""
+            minhaReacaoEmoji ? "text-red-500 font-bold" : ""
           }`}
         >
-          {isLiked ? <FaThumbsUp size={15} /> : <FaRegThumbsUp size={15} />}
-          <span>Gosto</span>
+          {minhaReacaoEmoji ? <span>{minhaReacaoEmoji}</span> : <FaHeart size={15} />}
+          <span>{minhaReacaoEmoji ? "Reagiu" : "Gosto"}</span>
         </button>
 
         <button
@@ -445,16 +527,9 @@ export default function PostCard({
 
               return (
                 <div key={index} className="flex items-start gap-2 text-xs group">
-                  <div
-                    onClick={() => c.userId && navigate(`/perfil/${c.userId}`)}
-                    className="cursor-pointer shrink-0 mt-0.5"
-                  >
+                  <div onClick={() => c.userId && navigate(`/perfil/${c.userId}`)} className="cursor-pointer shrink-0 mt-0.5">
                     {c.autorFoto ? (
-                      <img
-                        src={c.autorFoto}
-                        alt={c.autorNome}
-                        className="w-6 h-6 rounded-full object-cover"
-                      />
+                      <img src={c.autorFoto} alt={c.autorNome} className="w-6 h-6 rounded-full object-cover" />
                     ) : (
                       <div className="w-6 h-6 rounded-full bg-gray-300 text-gray-700 font-bold flex items-center justify-center text-[10px]">
                         {c.autorNome ? c.autorNome[0].toUpperCase() : "U"}

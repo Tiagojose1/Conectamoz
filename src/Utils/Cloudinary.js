@@ -6,19 +6,18 @@
 export const uploadParaCloudinary = async (file) => {
   if (!file) return null;
 
-  // Carrega as variáveis de ambiente do Vite
-  const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME;
-  // Nome ajustado para corresponder exatamente ao ficheiro .env (VITE_CLOUDINARY_UPLOAD_PRESET)
-  const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+  // Carrega do .env ou utiliza o valor de contingência (fallback)
+  const CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || "gvlkibf8";
+  const UPLOAD_PRESET = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || "awy4enei";
 
   // Validação preventiva das credenciais
   if (!CLOUD_NAME) {
-    console.error("Cloudinary Error: VITE_CLOUDINARY_CLOUD_NAME não configurado no .env");
+    console.error("Cloudinary Error: VITE_CLOUDINARY_CLOUD_NAME não configurado.");
     throw new Error("Configuração do Cloud Name pendente.");
   }
 
   if (!UPLOAD_PRESET) {
-    console.error("Cloudinary Error: VITE_CLOUDINARY_UPLOAD_PRESET não configurado no .env");
+    console.error("Cloudinary Error: VITE_CLOUDINARY_UPLOAD_PRESET não configurado.");
     throw new Error("Upload Preset do Cloudinary não configurado.");
   }
 

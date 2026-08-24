@@ -13,7 +13,7 @@ import {
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import PostCard from "../Components/PostCard";
-import { FaArrowLeft, FaEdit, FaUserCircle, FaCamera } from "react-icons/fa";
+import { FaArrowLeft, FaEdit, FaUserCircle, FaCamera, FaCheckCircle } from "react-icons/fa";
 
 export default function Profile() {
   const { userId } = useParams();
@@ -65,7 +65,7 @@ export default function Profile() {
         setPosts(userPosts);
       } catch (err) {
         console.error("Erro ao carregar perfil:", err);
-      } finally {
+      } font-medium {
         setCarregando(false);
       }
     };
@@ -91,7 +91,6 @@ export default function Profile() {
       setSalvando(true);
       let urlFotoFinal = usuario?.fotoUrl || usuario?.photoURL || "";
 
-      // Upload da nova foto de perfil (se selecionada)
       if (novaFoto) {
         const fotoRef = ref(storage, `perfis/${userId}_${Date.now()}`);
         await uploadBytes(fotoRef, novaFoto);
@@ -108,7 +107,6 @@ export default function Profile() {
 
       await updateDoc(userRef, novosDados);
 
-      // Atualiza o autor em lotes no Firestore (respeitando o limite de 500 ops do batch)
       if (posts.length > 0) {
         const batchSize = 450;
         for (let i = 0; i < posts.length; i += batchSize) {
@@ -133,7 +131,6 @@ export default function Profile() {
         ...novosDados
       }));
 
-      // Atualiza a lista local de posts
       setPosts((prev) =>
         prev.map((p) => ({
           ...p,
@@ -212,9 +209,16 @@ export default function Profile() {
           </div>
 
           <div className="flex-1 min-w-0">
-            <h2 className="text-xl font-bold text-gray-900 truncate">
-              {usuario.nome || usuario.displayName || "Utilizador Conectamoz"}
-            </h2>
+            {/* NOME DO UTILIZADOR COM SELO DE VERIFICAÇÃO */}
+            <div className="flex items-center gap-1.5">
+              <h2 className="text-xl font-bold text-gray-900 truncate">
+                {usuario.nome || usuario.displayName || "Utilizador Conectamoz"}
+              </h2>
+              {(usuario.verificado || usuario.isVerified) && (
+                <FaCheckCircle className="text-blue-500 text-base shrink-0" title="Conta Verificada" />
+              )}
+            </div>
+
             <p className="text-sm text-gray-500 truncate">{usuario.email}</p>
             <p className="text-xs text-blue-600 font-semibold mt-1">
               {posts.length} {posts.length === 1 ? "Publicação" : "Publicações"}
@@ -307,6 +311,7 @@ export default function Profile() {
               imagemUrl={post.imagemUrl}
               videoUrl={post.videoUrl}
               autorFoto={post.autorFoto}
+              verificado={usuario.verificado || usuario.isVerified || post.verificado}
             />
           ))
         )}
