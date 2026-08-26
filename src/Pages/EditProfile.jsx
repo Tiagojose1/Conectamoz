@@ -9,24 +9,25 @@ export default function EditProfile() {
   const navigate = useNavigate();
   const usuario = auth.currentUser;
 
-  // Estados dos Campos
-  const [nome, setNome] = useState("");
-  const [telefone, setTelefone] = useState("");
-  const [bio, setBio] = useState("");
-  const [localizacao, setLocalizacao] = useState("");
-  const [escola, setEscola] = useState("");
-  const [nivelEstudos, setNivelEstudos] = useState("Ensino Secundário");
-  const [estadoCivil, setEstadoCivil] = useState("Solteiro(a)");
-  const [trabalho, setTrabalho] = useState("");
-
-  // Imagens
-  const [fotoPerfil, setFotoPerfil] = useState("");
-  const [fotoCapa, setFotoCapa] = useState("");
+  // Estado único para os dados do formulário
+  const [formData, setFormData] = useState({
+    nome: "",
+    telefone: "",
+    bio: "",
+    localizacao: "",
+    escola: "",
+    nivelEstudos: "Ensino Secundário",
+    estadoCivil: "Solteiro(a)",
+    trabalho: "",
+    fotoPerfil: "",
+    fotoCapa: "",
+  });
 
   const [mensagem, setMensagem] = useState({ texto: "", erro: false });
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
 
+  // Carregar dados do perfil
   useEffect(() => {
     let isMounted = true;
 
@@ -43,19 +44,24 @@ export default function EditProfile() {
         if (isMounted) {
           if (dados.exists()) {
             const perfil = dados.data();
-            setNome(perfil.nome || perfil.displayName || usuario.displayName || "");
-            setTelefone(perfil.telefone || "");
-            setBio(perfil.bio || perfil.biografia || "");
-            setLocalizacao(perfil.localizacao || "");
-            setEscola(perfil.escola || "");
-            setNivelEstudos(perfil.nivelEstudos || "Ensino Secundário");
-            setEstadoCivil(perfil.estadoCivil || "Solteiro(a)");
-            setTrabalho(perfil.trabalho || "");
-            setFotoPerfil(perfil.foto || perfil.photoURL || usuario.photoURL || "");
-            setFotoCapa(perfil.fotoCapa || "");
+            setFormData({
+              nome: perfil.nome || perfil.displayName || usuario.displayName || "",
+              telefone: perfil.telefone || "",
+              bio: perfil.bio || perfil.biografia || "",
+              localizacao: perfil.localizacao || "",
+              escola: perfil.escola || "",
+              nivelEstudos: perfil.nivelEstudos || "Ensino Secundário",
+              estadoCivil: perfil.estadoCivil || "Solteiro(a)",
+              trabalho: perfil.trabalho || "",
+              fotoPerfil: perfil.foto || perfil.photoURL || usuario.photoURL || "",
+              fotoCapa: perfil.fotoCapa || "",
+            });
           } else {
-            setNome(usuario.displayName || "");
-            setFotoPerfil(usuario.photoURL || "");
+            setFormData((prev) => ({
+              ...prev,
+              nome: usuario.displayName || "",
+              fotoPerfil: usuario.photoURL || "",
+            }));
           }
         }
       } catch (error) {
@@ -72,48 +78,42 @@ export default function EditProfile() {
     };
   }, [usuario, navigate]);
 
+  // Atualizador genérico para inputs de texto e select
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
   // Upload Cloudinary
   const uploadImagemCloudinary = async (file) => {
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("upload_preset", "conectamoz"); // Substitui pelo teu preset se necessário
+    const dataForm = new FormData();
+    dataForm.append("file", file);
+    dataForm.append("upload_preset", "conectamoz"); // Ajusta o preset se necessário
 
     const res = await fetch("https://api.cloudinary.com/v1_1/SEU_CLOUD_NAME/image/upload", {
       method: "POST",
-      body: formData,
+      body: dataForm,
     });
     const data = await res.json();
     return data.secure_url;
   };
 
-  const handleUploadFotoPerfil = async (e) => {
+  const handleUploadFoto = async (e, campo) => {
     const file = e.target.files[0];
     if (!file) return;
+
     try {
       setSalvando(true);
       const url = await uploadImagemCloudinary(file);
-      setFotoPerfil(url);
+      setFormData((prev) => ({ ...prev, [campo]: url }));
     } catch (err) {
-      setMensagem({ texto: "Erro ao carregar foto de perfil.", erro: true });
+      setMensagem({ texto: `Erro ao carregar a ${campo === "fotoPerfil" ? "foto de perfil" : "foto de capa"}.`, erro: true });
     } finally {
       setSalvando(false);
     }
   };
 
-  const handleUploadFotoCapa = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    try {
-      setSalvando(true);
-      const url = await uploadImagemCloudinary(file);
-      setFotoCapa(url);
-    } catch (err) {
-      setMensagem({ texto: "Erro ao carregar foto de capa.", erro: true });
-    } finally {
-      setSalvando(false);
-    }
-  };
-
+  // Salvar alterações
   const salvar = async (e) => {
     e.preventDefault();
     if (!usuario) return;
@@ -122,31 +122,31 @@ export default function EditProfile() {
       setSalvando(true);
       setMensagem({ texto: "", erro: false });
 
-      const numTelefone = telefone.replace(/\D/g, "");
+      const numTelefone = formData.telefone.replace(/\D/g, "");
 
       const dadosAtualizados = {
-        nome,
+        nome: formData.nome,
         telefone: numTelefone,
-        bio,
-        localizacao,
-        escola,
-        nivelEstudos,
-        estadoCivil,
-        trabalho,
-        foto: fotoPerfil,
-        fotoCapa,
+        bio: formData.bio,
+        localizacao: formData.localizacao,
+        escola: formData.escola,
+        nivelEstudos: formData.nivelEstudos,
+        estadoCivil: formData.estadoCivil,
+        trabalho: formData.trabalho,
+        foto: formData.fotoPerfil,
+        fotoCapa: formData.fotoCapa,
         updatedAt: serverTimestamp(),
       };
 
-      // 1. Atualizar documento na coleção 'users' e 'usuarios'
+      // Atualiza ambas as coleções
       await setDoc(doc(db, "users", usuario.uid), dadosAtualizados, { merge: true });
       await setDoc(doc(db, "usuarios", usuario.uid), dadosAtualizados, { merge: true });
 
-      // 2. Atualizar perfil no Firebase Auth
+      // Atualiza o perfil no Firebase Auth
       if (auth.currentUser) {
         await updateProfile(auth.currentUser, {
-          displayName: nome,
-          photoURL: fotoPerfil,
+          displayName: formData.nome,
+          photoURL: formData.fotoPerfil,
         });
       }
 
@@ -199,8 +199,8 @@ export default function EditProfile() {
               Foto de Capa
             </label>
             <div className="relative h-32 bg-gray-200 rounded-xl overflow-hidden border">
-              {fotoCapa ? (
-                <img src={fotoCapa} alt="Capa" className="w-full h-full object-cover" />
+              {formData.fotoCapa ? (
+                <img src={formData.fotoCapa} alt="Capa" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
                   Sem foto de capa
@@ -208,7 +208,12 @@ export default function EditProfile() {
               )}
               <label className="absolute bottom-2 right-2 bg-black/70 text-white p-2 rounded-full cursor-pointer hover:bg-black transition">
                 <FaCamera size={14} />
-                <input type="file" accept="image/*" onChange={handleUploadFotoCapa} className="hidden" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleUploadFoto(e, "fotoCapa")}
+                  className="hidden"
+                />
               </label>
             </div>
           </div>
@@ -217,13 +222,18 @@ export default function EditProfile() {
           <div className="flex items-center gap-4">
             <div className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-blue-600 flex-shrink-0">
               <img
-                src={fotoPerfil || "https://via.placeholder.com/150"}
+                src={formData.fotoPerfil || "https://via.placeholder.com/150"}
                 alt="Perfil"
                 className="w-full h-full object-cover"
               />
               <label className="absolute inset-0 bg-black/40 flex items-center justify-center text-white cursor-pointer opacity-0 hover:opacity-100 transition">
                 <FaCamera size={18} />
-                <input type="file" accept="image/*" onChange={handleUploadFotoPerfil} className="hidden" />
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleUploadFoto(e, "fotoPerfil")}
+                  className="hidden"
+                />
               </label>
             </div>
             <div>
@@ -232,51 +242,58 @@ export default function EditProfile() {
             </div>
           </div>
 
-          {/* CAMPOS DE INFORMAÇÃO */}
+          {/* NOME COMPLETO */}
           <div>
             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
               Nome Completo
             </label>
             <input
               type="text"
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
+              name="nome"
+              value={formData.nome}
+              onChange={handleChange}
               required
               className="w-full p-3 bg-gray-50 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
             />
           </div>
 
+          {/* TELEFONE */}
           <div>
             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
               Telefone
             </label>
             <input
               type="tel"
+              name="telefone"
               maxLength={9}
               placeholder="Ex: 841234567"
-              value={telefone}
-               type="text"
-               maxLength={50}
-              value={email}
-              onChange={(e) => setTelefone(e.target.value.replace(/\D/g, ""))}
-               onChange={(e) => setEmail(e.target.value.replace(/\D/g, ""))}
+              value={formData.telefone}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  telefone: e.target.value.replace(/\D/g, ""),
+                }))
+              }
               className="w-full p-3 bg-gray-50 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
             />
           </div>
 
+          {/* BIOGRAFIA */}
           <div>
             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
               Biografia / Sobre mim
             </label>
             <textarea
+              name="bio"
               placeholder="Escreve algo sobre ti..."
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
+              value={formData.bio}
+              onChange={handleChange}
               className="w-full p-3 bg-gray-50 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white resize-none transition"
               rows={3}
             />
           </div>
 
+          {/* LOCALIZAÇÃO E ESCOLA */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
@@ -284,9 +301,10 @@ export default function EditProfile() {
               </label>
               <input
                 type="text"
+                name="localizacao"
                 placeholder="Ex: Maputo, Moçambique"
-                value={localizacao}
-                onChange={(e) => setLocalizacao(e.target.value)}
+                value={formData.localizacao}
+                onChange={handleChange}
                 className="w-full p-3 bg-gray-50 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
               />
             </div>
@@ -297,22 +315,25 @@ export default function EditProfile() {
               </label>
               <input
                 type="text"
+                name="escola"
                 placeholder="Ex: UEM, ISCTEM..."
-                value={escola}
-                onChange={(e) => setEscola(e.target.value)}
+                value={formData.escola}
+                onChange={handleChange}
                 className="w-full p-3 bg-gray-50 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
               />
             </div>
           </div>
 
+          {/* NÍVEL DE ESTUDOS E ESTADO CIVIL */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
                 Nível de Estudos
               </label>
               <select
-                value={nivelEstudos}
-                onChange={(e) => setNivelEstudos(e.target.value)}
+                name="nivelEstudos"
+                value={formData.nivelEstudos}
+                onChange={handleChange}
                 className="w-full p-3 bg-gray-50 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
               >
                 <option value="Ensino Primário">Ensino Primário</option>
@@ -329,8 +350,9 @@ export default function EditProfile() {
                 Estado Civil
               </label>
               <select
-                value={estadoCivil}
-                onChange={(e) => setEstadoCivil(e.target.value)}
+                name="estadoCivil"
+                value={formData.estadoCivil}
+                onChange={handleChange}
                 className="w-full p-3 bg-gray-50 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
               >
                 <option value="Solteiro(a)">Solteiro(a)</option>
@@ -343,19 +365,22 @@ export default function EditProfile() {
             </div>
           </div>
 
+          {/* TRABALHO */}
           <div>
             <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
               Trabalho / Profissão
             </label>
             <input
               type="text"
+              name="trabalho"
               placeholder="Ex: Desenvolvedor de Software"
-              value={trabalho}
-              onChange={(e) => setTrabalho(e.target.value)}
+              value={formData.trabalho}
+              onChange={handleChange}
               className="w-full p-3 bg-gray-50 border rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition"
             />
           </div>
 
+          {/* MENSAGEM DE FEEDBACK */}
           {mensagem.texto && (
             <p
               className={`text-center text-sm font-medium p-2 rounded-lg ${
@@ -366,6 +391,7 @@ export default function EditProfile() {
             </p>
           )}
 
+          {/* BOTAO SALVAR */}
           <button
             type="submit"
             disabled={salvando}
@@ -376,6 +402,7 @@ export default function EditProfile() {
             <FaSave /> {salvando ? "A guardar..." : "Salvar Alterações"}
           </button>
 
+          {/* BOTAO CANCELAR */}
           <button
             type="button"
             onClick={() => navigate(`/profile/${usuario?.uid}`)}
