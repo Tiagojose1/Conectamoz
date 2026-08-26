@@ -5,8 +5,6 @@ import {
   doc,
   updateDoc,
   deleteDoc,
-  arrayUnion,
-  arrayRemove,
   addDoc,
   collection,
   serverTimestamp
@@ -16,6 +14,7 @@ import { criarNotificacao } from "../Utils/Notifications";
 
 import {
   FaHeart,
+  FaThumbsUp,
   FaComment,
   FaPaperPlane,
   FaEllipsisV,
@@ -51,32 +50,36 @@ export default function PostCard({
   const [novoComentario, setNovoComentario] = useState("");
   const [aCarregarComentario, setACarregarComentario] = useState(false);
 
-  // Novos Estados Visuais e de Interação (Fase 1 e 2)
+  // Estados Visuais e de Interação
   const [mostrarReacoes, setMostrarReacoes] = useState(false);
   const [coracaoAnimado, setCoracaoAnimado] = useState(false);
   const [semSom, setSemSom] = useState(true);
 
-  // Lista de Reações Dinâmicas
+  // Lista de Reações Dinâmicas (Inclui o Ícone/Emoji de Like tradicional e Emojis)
   const listaReacoes = [
-    { emoji: "❤️", nome: "Gosto" },
+    { emoji: "👍", nome: "Gosto" },
+    { emoji: "❤️", nome: "Amo" },
     { emoji: "😂", nome: "Riso" },
     { emoji: "😮", nome: "Uau" },
     { emoji: "😢", nome: "Triste" },
     { emoji: "😡", nome: "Zangado" },
-    { emoji: "🔥", nome: "Fogo" },
+    { emoji: "👌", nome: "ok hand" },
+    { emoji: "😘", nome: "beijo" },
+    { emoji: "🔥", nome: "Fogo" }
   ];
 
-  // Identificar a reação do utilizador atual
+  // Identificar a reação do utilizador atual (seja ela um objeto {uid, emoji} ou uma string "uid")
   const minhaReacaoObj = user
     ? curtidas.find((c) => (typeof c === "object" ? c.uid === user.uid : c === user.uid))
     : null;
+
   const minhaReacaoEmoji = minhaReacaoObj
     ? typeof minhaReacaoObj === "object"
       ? minhaReacaoObj.emoji
-      : "❤️"
+      : "👍"
     : null;
 
-  // Otimizador de Mídia Cloudinary para conexões mais lentas
+  // Otimizador de Mídia Cloudinary
   const otimizarUrl = (url, opts = "f_auto,q_auto") => {
     if (!url || !url.includes("cloudinary.com")) return url;
     return url.replace("/upload/", `/upload/${opts}/`);
@@ -120,7 +123,7 @@ export default function PostCard({
         await navigator.share({
           title: `Publicação de ${author} no Conectamoz`,
           text: content ? content.substring(0, 100) : "Vê esta publicação no Conectamoz!",
-          url: linkPost,
+          url: linkPost
         });
       } else {
         await navigator.clipboard.writeText(linkPost);
@@ -190,51 +193,54 @@ export default function PostCard({
     }
   };
 
-  // Função Avançada de Reação (Gosto e Emojis)
-  const handleReagir = async (emojiEscolhido = "❤️") => {
+  // Função Corrigida de Reação Persistente (Gosto e Emojis)
+  const handleReagir = async (emojiEscolhido = "👍") => {
     if (!user) return alert("Precisas de iniciar sessão para interagir!");
 
     const postRef = doc(db, "posts", id);
     let novasCurtidas = [...curtidas];
 
     try {
+      // 1. Se o utilizador já reagiu, remove a reação antiga primeiro
       if (minhaReacaoEmoji) {
-        // Remover Reação
         novasCurtidas = novasCurtidas.filter((c) =>
           typeof c === "object" ? c.uid !== user.uid : c !== user.uid
         );
-        await updateDoc(postRef, {
-          curtidas: novasCurtidas,
-          likes: arrayRemove(user.uid)
-        });
-      } else {
-        // Adicionar Reação
-        const novoObjeto = { uid: user.uid, emoji: emojiEscolhido };
-        novasCurtidas.push(novoObjeto);
-
-        await updateDoc(postRef, {
-          curtidas: arrayUnion(novoObjeto),
-          likes: arrayUnion(user.uid)
-        });
-
-        if (autorId !== user.uid) {
-          await criarNotificacao({
-            destinatarioId: autorId,
-            remetente: {
-              uid: user.uid,
-              nome: user.displayName || user.email?.split("@")[0] || "Utilizador",
-              foto: user.photoURL || ""
-            },
-            tipo: "like",
-            postId: id
-          });
-        }
       }
 
+      // 2. Se a reação for diferente ou se ainda não tinha reagido, adiciona a nova reação
+      if (minhaReacaoEmoji !== emojiEscolhido) {
+        const novoObjetoReacao = { uid: user.uid, emoji: emojiEscolhido };
+        novasCurtidas.push(novoObjetoReacao);
+      }
+
+      // Atualiza o estado local imediatamente para fluidez visual
       setCurtidas(novasCurtidas);
       setMostrarReacoes(false);
+
+      // 3. Atualiza no Firestore mantendo a sincronização entre 'curtidas' e 'likes'
+      await updateDoc(postRef, {
+        curtidas: novasCurtidas,
+        likes: novasCurtidas.map((item) => (typeof item === "object" ? item.uid : item))
+      });
+
+      // 4. Envia notificação apenas se for uma nova reação
+      if (minhaReacaoEmoji !== emojiEscolhido && autorId !== user.uid) {
+        await criarNotificacao({
+          destinatarioId: autorId,
+          remetente: {
+            uid: user.uid,
+            nome: user.displayName || user.email?.split("@")[0] || "Utilizador",
+            foto: user.photoURL || ""
+          },
+          tipo: "like",
+          postId: id
+        });
+      }
     } catch (error) {
-      console.error("Erro ao reagir ao post:", error);
+      console.error("Erro ao atualizar reação no Firestore:", error);
+      // Em caso de erro, reverte para as curtidas anteriores
+      setCurtidas(curtidas);
     }
   };
 
@@ -265,12 +271,15 @@ export default function PostCard({
       };
 
       const postRef = doc(db, "posts", id);
-      await updateDoc(postRef, {
-        comentarios: arrayUnion(comentarioObj)
-      });
 
-      setListaComentarios((prev) => [...prev, comentarioObj]);
+      // Adiciona o comentário diretamente no estado e no Firestore
+      const novaLista = [...listaComentarios, comentarioObj];
+      setListaComentarios(novaLista);
       setNovoComentario("");
+
+      await updateDoc(postRef, {
+        comentarios: novaLista
+      });
 
       if (autorId !== user.uid) {
         await criarNotificacao({
@@ -296,12 +305,13 @@ export default function PostCard({
     if (!window.confirm("Queres mesmo apagar este comentário?")) return;
 
     try {
+      const novaListaComentarios = listaComentarios.filter((c) => c !== comentarioParaRemover);
+      setListaComentarios(novaListaComentarios);
+
       const postRef = doc(db, "posts", id);
       await updateDoc(postRef, {
-        comentarios: arrayRemove(comentarioParaRemover)
+        comentarios: novaListaComentarios
       });
-
-      setListaComentarios((prev) => prev.filter((c) => c !== comentarioParaRemover));
     } catch (error) {
       console.error("Erro ao apagar comentário:", error);
       alert("Erro ao apagar o comentário.");
@@ -458,8 +468,8 @@ export default function PostCard({
       <div className="flex items-center justify-between px-4 py-2 border-t text-xs text-gray-500">
         <div className="flex items-center gap-1">
           <span className="flex -space-x-1">
+            <span className="bg-blue-500 text-white text-[10px] p-0.5 rounded-full">👍</span>
             <span className="bg-red-500 text-white text-[10px] p-0.5 rounded-full">❤️</span>
-            <span className="bg-amber-400 text-white text-[10px] p-0.5 rounded-full">😂</span>
           </span>
           <span className="ml-1 font-medium">{curtidas.length} reações</span>
         </div>
@@ -469,9 +479,9 @@ export default function PostCard({
         </button>
       </div>
 
-      {/* Botões de Ação com Bar de Emojis */}
+      {/* Botões de Ação com Barra de Emojis e Like Tradicional */}
       <div className="flex border-t border-b border-gray-100 text-gray-600 font-medium text-xs relative">
-        {/* Pop-up de Emojis ao passar o cursor ou ao clicar no botão */}
+        {/* Pop-up de Emojis */}
         {mostrarReacoes && (
           <div
             onMouseLeave={() => setMostrarReacoes(false)}
@@ -490,15 +500,24 @@ export default function PostCard({
           </div>
         )}
 
+        {/* Botão de Gosto/Reação */}
         <button
-          onClick={() => handleReagir(minhaReacaoEmoji || "❤️")}
+          onClick={() => handleReagir(minhaReacaoEmoji || "👍")}
           onMouseEnter={() => setMostrarReacoes(true)}
           className={`flex-1 py-2.5 flex items-center justify-center gap-2 hover:bg-gray-50 transition ${
-            minhaReacaoEmoji ? "text-red-500 font-bold" : ""
+            minhaReacaoEmoji ? "text-blue-600 font-bold" : "text-gray-600"
           }`}
         >
-          {minhaReacaoEmoji ? <span>{minhaReacaoEmoji}</span> : <FaHeart size={15} />}
-          <span>{minhaReacaoEmoji ? "Reagiu" : "Gosto"}</span>
+          {minhaReacaoEmoji ? (
+            minhaReacaoEmoji === "👍" ? (
+              <FaThumbsUp size={16} className="text-blue-600" />
+            ) : (
+              <span className="text-sm">{minhaReacaoEmoji}</span>
+            )
+          ) : (
+            <FaThumbsUp size={16} className="text-gray-500" />
+          )}
+          <span>{minhaReacaoEmoji ? (minhaReacaoEmoji === "👍" ? "Gostei" : "Reagiu") : "Gosto"}</span>
         </button>
 
         <button
