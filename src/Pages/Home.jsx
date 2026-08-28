@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+
 import {
   collection,
   query,
@@ -10,20 +11,15 @@ import {
   arrayUnion,
   arrayRemove,
 } from "firebase/firestore";
+
 import {
-  FaSearch,
-  FaRegComment,
-  FaRegBell,
   FaRegImage,
   FaPlus,
   FaVideo,
   FaThumbsUp,
   FaRegCommentAlt,
   FaShare,
-  FaCompass,
-  FaRegUser,
   FaEllipsisH,
-  FaHome,
 } from "react-icons/fa";
 
 import { db } from "../firebase";
@@ -36,12 +32,14 @@ export default function Home() {
 
   const [posts, setPosts] = useState([]);
   const [stories, setStories] = useState([]);
+
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [loadingStories, setLoadingStories] = useState(true);
+
   const [errorPosts, setErrorPosts] = useState("");
 
   // ============================================================
-  // PUBLICAÇÕES — FIRESTORE
+  // PUBLICAÇÕES
   // ============================================================
 
   useEffect(() => {
@@ -65,9 +63,13 @@ export default function Home() {
         setErrorPosts("");
       },
       (error) => {
-        console.error("Erro ao carregar publicações:", error);
+        console.error(
+          "Erro ao carregar publicações:",
+          error
+        );
 
         setLoadingPosts(false);
+
         setErrorPosts(
           "Não foi possível carregar as publicações."
         );
@@ -78,7 +80,7 @@ export default function Home() {
   }, []);
 
   // ============================================================
-  // STORIES — FIRESTORE
+  // STORIES
   // ============================================================
 
   useEffect(() => {
@@ -92,16 +94,22 @@ export default function Home() {
     const unsubscribe = onSnapshot(
       storiesQuery,
       (snapshot) => {
-        const listaStories = snapshot.docs.map((documento) => ({
-          id: documento.id,
-          ...documento.data(),
-        }));
+        const listaStories = snapshot.docs.map(
+          (documento) => ({
+            id: documento.id,
+            ...documento.data(),
+          })
+        );
 
         setStories(listaStories);
         setLoadingStories(false);
       },
       (error) => {
-        console.error("Erro ao carregar Stories:", error);
+        console.error(
+          "Erro ao carregar Stories:",
+          error
+        );
+
         setLoadingStories(false);
       }
     );
@@ -110,7 +118,7 @@ export default function Home() {
   }, []);
 
   // ============================================================
-  // CURTIR / REMOVER CURTIDA
+  // CURTIR
   // ============================================================
 
   const handleLike = async (post) => {
@@ -138,7 +146,10 @@ export default function Home() {
         });
       }
     } catch (error) {
-      console.error("Erro ao atualizar gosto:", error);
+      console.error(
+        "Erro ao atualizar gosto:",
+        error
+      );
     }
   };
 
@@ -147,21 +158,36 @@ export default function Home() {
   // ============================================================
 
   const handleShare = async (post) => {
-    const url = `${window.location.origin}/post/${post.id}`;
+    const url =
+      `${window.location.origin}/post/${post.id}`;
 
     try {
       if (navigator.share) {
         await navigator.share({
           title: "KonnexVib",
-          text: post.conteudo || "Veja esta publicação no KonnexVib.",
+          text:
+            post.conteudo ||
+            "Veja esta publicação no KonnexVib.",
           url,
         });
-      } else {
+      } else if (navigator.clipboard) {
         await navigator.clipboard.writeText(url);
-        alert("Link da publicação copiado!");
+
+        alert(
+          "Link da publicação copiado!"
+        );
+      } else {
+        alert(
+          `Copie este link:\n${url}`
+        );
       }
     } catch (error) {
-      console.error("Erro ao partilhar:", error);
+      if (error?.name !== "AbortError") {
+        console.error(
+          "Erro ao partilhar:",
+          error
+        );
+      }
     }
   };
 
@@ -183,8 +209,10 @@ export default function Home() {
       }
 
       const agora = new Date();
+
       const diferenca =
-        agora.getTime() - dataPost.getTime();
+        agora.getTime() -
+        dataPost.getTime();
 
       const minutos = Math.floor(
         diferenca / (1000 * 60)
@@ -195,22 +223,36 @@ export default function Home() {
       );
 
       const dias = Math.floor(
-        diferenca / (1000 * 60 * 60 * 24)
+        diferenca /
+          (1000 * 60 * 60 * 24)
       );
 
-      if (minutos < 1) return "agora";
-      if (minutos < 60) return `${minutos} min`;
-      if (horas < 24) return `${horas} h`;
-      if (dias < 7) return `${dias} d`;
+      if (minutos < 1) {
+        return "agora";
+      }
 
-      return dataPost.toLocaleDateString("pt-PT");
+      if (minutos < 60) {
+        return `${minutos} min`;
+      }
+
+      if (horas < 24) {
+        return `${horas} h`;
+      }
+
+      if (dias < 7) {
+        return `${dias} d`;
+      }
+
+      return dataPost.toLocaleDateString(
+        "pt-PT"
+      );
     } catch {
       return "";
     }
   };
 
   // ============================================================
-  // FOTO DO UTILIZADOR ATUAL
+  // FOTO DO UTILIZADOR
   // ============================================================
 
   const fotoUsuario =
@@ -223,61 +265,7 @@ export default function Home() {
   // ============================================================
 
   return (
-    <div className="bg-[#f8f9fa] min-h-screen pb-24 font-sans text-gray-900">
-
-      {/* ======================================================
-          NAVBAR
-      ====================================================== */}
-
-      <header className="sticky top-0 z-40 bg-white px-4 py-3 flex items-center justify-between shadow-sm">
-
-        <button
-          onClick={() => navigate("/home")}
-          className="text-2xl font-extrabold tracking-tight"
-        >
-          <span className="text-gray-900">
-            Konnex
-          </span>
-
-          <span className="text-[#635BFF]">
-            Vib
-          </span>
-        </button>
-
-        <div className="flex items-center gap-2">
-
-          {/* PESQUISA */}
-
-          <button
-            onClick={() => navigate("/search")}
-            className="w-10 h-10 rounded-full flex items-center justify-center text-gray-700 hover:bg-gray-100 transition"
-            aria-label="Pesquisar"
-          >
-            <FaSearch size={18} />
-          </button>
-
-          {/* MENSAGENS */}
-
-          <button
-            onClick={() => navigate("/chat")}
-            className="relative w-10 h-10 rounded-full flex items-center justify-center text-gray-700 hover:bg-gray-100 transition"
-            aria-label="Mensagens"
-          >
-            <FaRegComment size={20} />
-          </button>
-
-          {/* NOTIFICAÇÕES */}
-
-          <button
-            onClick={() => navigate("/notifications")}
-            className="relative w-10 h-10 rounded-full flex items-center justify-center text-gray-700 hover:bg-gray-100 transition"
-            aria-label="Notificações"
-          >
-            <FaRegBell size={20} />
-          </button>
-
-        </div>
-      </header>
+    <div className="bg-[#f8f9fa] min-h-screen pb-24 pt-16 font-sans text-gray-900">
 
       {/* ======================================================
           CRIAR PUBLICAÇÃO
@@ -292,14 +280,18 @@ export default function Home() {
         />
 
         <button
-          onClick={() => navigate("/create-post")}
+          onClick={() =>
+            navigate("/create-post")
+          }
           className="flex-1 text-left bg-gray-100 hover:bg-gray-200 transition rounded-full px-4 py-2.5 text-gray-400 text-sm"
         >
           O que está a acontecer?
         </button>
 
         <button
-          onClick={() => navigate("/create-post")}
+          onClick={() =>
+            navigate("/create-post")
+          }
           className="flex flex-col items-center justify-center text-gray-500 hover:text-[#635BFF] transition"
           aria-label="Adicionar foto"
         >
@@ -311,7 +303,9 @@ export default function Home() {
         </button>
 
         <button
-          onClick={() => navigate("/create-post")}
+          onClick={() =>
+            navigate("/create-post")
+          }
           className="hidden sm:flex flex-col items-center justify-center text-gray-500 hover:text-[#635BFF] transition"
           aria-label="Adicionar vídeo"
         >
@@ -337,7 +331,9 @@ export default function Home() {
           </h2>
 
           <button
-            onClick={() => navigate("/stories")}
+            onClick={() =>
+              navigate("/stories")
+            }
             className="text-xs font-semibold text-[#635BFF] hover:underline"
           >
             Ver todos
@@ -350,10 +346,11 @@ export default function Home() {
           {/* CRIAR STORY */}
 
           <button
-            onClick={() => navigate("/create-story")}
+            onClick={() =>
+              navigate("/create-story")
+            }
             className="relative w-24 h-36 rounded-2xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-[#635BFF] to-[#3B28CC] shadow-sm"
           >
-
             <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
 
               <div className="w-9 h-9 rounded-full bg-white text-[#635BFF] flex items-center justify-center mb-2 shadow">
@@ -365,35 +362,29 @@ export default function Home() {
               </span>
 
             </div>
-
           </button>
 
-          {/* STORIES REAIS */}
+          {/* STORIES */}
 
           {loadingStories ? (
-
             <div className="text-sm text-gray-400 px-3">
               A carregar...
             </div>
-
           ) : stories.length === 0 ? (
-
             <div className="text-sm text-gray-400 px-3">
               Ainda não há Stories.
             </div>
-
           ) : (
-
             stories.map((story) => (
-
               <button
                 key={story.id}
                 onClick={() =>
-                  navigate(`/stories/${story.id}`)
+                  navigate(
+                    `/stories/${story.id}`
+                  )
                 }
                 className="flex flex-col items-center flex-shrink-0"
               >
-
                 <div className="p-0.5 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-500">
 
                   <img
@@ -402,20 +393,22 @@ export default function Home() {
                       story.foto ||
                       "https://ui-avatars.com/api/?name=User"
                     }
-                    alt={story.autorNome || "Story"}
+                    alt={
+                      story.autorNome ||
+                      "Story"
+                    }
                     className="w-16 h-16 rounded-full object-cover border-2 border-white"
                   />
 
                 </div>
 
                 <span className="text-xs font-medium text-gray-700 mt-1.5 max-w-16 truncate">
-                  {story.autorNome || "Utilizador"}
+                  {story.autorNome ||
+                    "Utilizador"}
                 </span>
 
               </button>
-
             ))
-
           )}
 
         </div>
@@ -467,7 +460,9 @@ export default function Home() {
             </p>
 
             <button
-              onClick={() => navigate("/create-post")}
+              onClick={() =>
+                navigate("/create-post")
+              }
               className="mt-5 bg-[#635BFF] text-white px-5 py-2.5 rounded-full text-sm font-semibold hover:bg-[#5148d9] transition"
             >
               Criar publicação
@@ -479,19 +474,27 @@ export default function Home() {
 
           posts.map((post) => {
 
-            const curtidas = Array.isArray(post.curtidas)
-              ? post.curtidas
-              : [];
+            const curtidas =
+              Array.isArray(post.curtidas)
+                ? post.curtidas
+                : [];
 
-            const comentarios = Array.isArray(
-              post.comentarios
-            )
-              ? post.comentarios
-              : [];
+            const comentarios =
+              Array.isArray(
+                post.comentarios
+              )
+                ? post.comentarios
+                : [];
 
             const jaCurtiu =
               usuario &&
-              curtidas.includes(usuario.uid);
+              curtidas.includes(
+                usuario.uid
+              );
+
+            const autorId =
+              post.autorId ||
+              post.uid;
 
             return (
 
@@ -505,11 +508,13 @@ export default function Home() {
                 <div className="flex items-center justify-between px-4 py-3">
 
                   <button
-                    onClick={() =>
-                      navigate(
-                        `/profile/${post.autorId || post.uid}`
-                      )
-                    }
+                    onClick={() => {
+                      if (autorId) {
+                        navigate(
+                          `/profile/${autorId}`
+                        );
+                      }
+                    }}
                     className="flex items-center gap-3 text-left"
                   >
 
@@ -519,18 +524,25 @@ export default function Home() {
                         post.fotoPerfil ||
                         "https://ui-avatars.com/api/?name=User"
                       }
-                      alt={post.autorNome || "Utilizador"}
+                      alt={
+                        post.autorNome ||
+                        "Utilizador"
+                      }
                       className="w-10 h-10 rounded-full object-cover border border-gray-200"
                     />
 
                     <div>
 
                       <h3 className="font-bold text-sm text-gray-900 leading-tight">
-                        {post.autorNome || "Utilizador"}
+                        {post.autorNome ||
+                          "Utilizador"}
                       </h3>
 
                       <p className="text-xs text-gray-400">
-                        {formatarData(post.criadoEm)} · 🌐
+                        {formatarData(
+                          post.criadoEm
+                        )}{" "}
+                        · 🌐
                       </p>
 
                     </div>
@@ -549,17 +561,14 @@ export default function Home() {
                 {/* TEXTO */}
 
                 {post.conteudo && (
-
                   <p className="px-4 pb-3 text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
                     {post.conteudo}
                   </p>
-
                 )}
 
                 {/* IMAGEM */}
 
                 {post.imagemUrl && (
-
                   <div className="w-full max-h-[520px] overflow-hidden bg-gray-100">
 
                     <img
@@ -570,13 +579,11 @@ export default function Home() {
                     />
 
                   </div>
-
                 )}
 
                 {/* VÍDEO */}
 
                 {post.videoUrl && (
-
                   <div className="w-full bg-black">
 
                     <video
@@ -587,7 +594,6 @@ export default function Home() {
                     />
 
                   </div>
-
                 )}
 
                 {/* ESTATÍSTICAS */}
@@ -597,7 +603,6 @@ export default function Home() {
                   <div className="flex items-center gap-2">
 
                     {curtidas.length > 0 && (
-
                       <span className="flex items-center gap-1">
 
                         <span className="w-5 h-5 rounded-full bg-[#635BFF] flex items-center justify-center text-[10px] text-white">
@@ -609,7 +614,6 @@ export default function Home() {
                         </span>
 
                       </span>
-
                     )}
 
                   </div>
@@ -618,14 +622,18 @@ export default function Home() {
 
                     <button
                       onClick={() =>
-                        navigate(`/post/${post.id}`)
+                        navigate(
+                          `/post/${post.id}`
+                        )
                       }
                     >
-                      {comentarios.length} comentários
+                      {comentarios.length}{" "}
+                      comentários
                     </button>
 
                     <span>
-                      {post.partilhas || 0} partilhas
+                      {post.partilhas || 0}{" "}
+                      partilhas
                     </span>
 
                   </div>
@@ -636,8 +644,12 @@ export default function Home() {
 
                 <div className="flex items-center justify-around py-2 text-gray-600 text-sm font-medium">
 
+                  {/* GOSTO */}
+
                   <button
-                    onClick={() => handleLike(post)}
+                    onClick={() =>
+                      handleLike(post)
+                    }
                     className={`flex items-center gap-2 transition py-2 px-3 rounded-lg ${
                       jaCurtiu
                         ? "text-[#635BFF]"
@@ -647,13 +659,19 @@ export default function Home() {
                     <FaThumbsUp size={16} />
 
                     <span>
-                      {jaCurtiu ? "Gostei" : "Gosto"}
+                      {jaCurtiu
+                        ? "Gostei"
+                        : "Gosto"}
                     </span>
                   </button>
 
+                  {/* COMENTAR */}
+
                   <button
                     onClick={() =>
-                      navigate(`/post/${post.id}`)
+                      navigate(
+                        `/post/${post.id}`
+                      )
                     }
                     className="flex items-center gap-2 hover:text-[#635BFF] transition py-2 px-3 rounded-lg"
                   >
@@ -664,8 +682,12 @@ export default function Home() {
                     </span>
                   </button>
 
+                  {/* PARTILHAR */}
+
                   <button
-                    onClick={() => handleShare(post)}
+                    onClick={() =>
+                      handleShare(post)
+                    }
                     className="flex items-center gap-2 hover:text-[#635BFF] transition py-2 px-3 rounded-lg"
                   >
                     <FaShare size={16} />
@@ -678,83 +700,11 @@ export default function Home() {
                 </div>
 
               </article>
-
             );
           })
-
         )}
 
       </main>
-
-      {/* ======================================================
-          NAVEGAÇÃO INFERIOR
-      ====================================================== */}
-
-      <nav className="fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 px-5 sm:px-8 py-2 flex items-center justify-between z-50">
-
-        {/* INÍCIO */}
-
-        <button
-          onClick={() => navigate("/home")}
-          className="flex flex-col items-center text-[#635BFF]"
-        >
-          <FaHome size={21} />
-
-          <span className="text-[10px] font-bold mt-0.5">
-            Início
-          </span>
-        </button>
-
-        {/* DESCOBRIR */}
-
-        <button
-          onClick={() => navigate("/search")}
-          className="flex flex-col items-center text-gray-400 hover:text-gray-600"
-        >
-          <FaCompass size={21} />
-
-          <span className="text-[10px] font-medium mt-0.5">
-            Descobrir
-          </span>
-        </button>
-
-        {/* CRIAR */}
-
-        <button
-          onClick={() => navigate("/create-post")}
-          className="w-12 h-12 rounded-full bg-[#3B28CC] text-white flex items-center justify-center shadow-lg hover:scale-105 transition -mt-5 border-4 border-white"
-          aria-label="Criar publicação"
-        >
-          <FaPlus size={18} />
-        </button>
-
-        {/* MENSAGENS */}
-
-        <button
-          onClick={() => navigate("/chat")}
-          className="flex flex-col items-center text-gray-400 hover:text-gray-600"
-        >
-          <FaRegComment size={21} />
-
-          <span className="text-[10px] font-medium mt-0.5">
-            Mensagens
-          </span>
-        </button>
-
-        {/* PERFIL */}
-
-        <button
-          onClick={() => navigate("/profile")}
-          className="flex flex-col items-center text-gray-400 hover:text-gray-600"
-        >
-          <FaRegUser size={21} />
-
-          <span className="text-[10px] font-medium mt-0.5">
-            Perfil
-          </span>
-        </button>
-
-      </nav>
 
     </div>
   );

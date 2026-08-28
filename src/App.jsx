@@ -1,5 +1,5 @@
 import React from "react";
-import AppRoutes from "./Routes/AppRoutes";
+import AppRoutes from "./routes/AppRoutes";
 
 function App() {
   return <AppRoutes />;

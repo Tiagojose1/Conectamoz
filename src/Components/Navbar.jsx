@@ -1,20 +1,30 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { 
-  FaSearch, 
-  FaRegComment, 
-  FaRegBell, 
-  FaPlus, 
-  FaHome, 
-  FaCompass, 
+
+import {
+  FaSearch,
+  FaRegComment,
+  FaRegBell,
+  FaPlus,
+  FaHome,
+  FaCompass,
   FaRegUser,
   FaEdit,
   FaHistory,
   FaVideo,
-  FaStickyNote
+  FaStickyNote,
 } from "react-icons/fa";
+
 import { auth, db } from "../firebase";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+
+import {
+  collection,
+  query,
+  where,
+  onSnapshot,
+} from "firebase/firestore";
+
+import { onAuthStateChanged } from "firebase/auth";
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -22,171 +32,295 @@ export default function Navbar() {
 
   const [showCreateMenu, setShowCreateMenu] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [user, setUser] = useState(null);
 
-  const user = auth.currentUser;
+  // ============================================================
+  // UTILIZADOR AUTENTICADO
+  // ============================================================
 
-  // Escuta no Firestore para notificações/pedidos pendentes em tempo real
   useEffect(() => {
-    if (!user) return;
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
 
-    const q = query(
-      collection(db, "friend_requests"),
+    return () => unsubscribeAuth();
+  }, []);
+
+  // ============================================================
+  // PEDIDOS DE AMIZADE PENDENTES
+  // ============================================================
+
+  useEffect(() => {
+    if (!user) {
+      setUnreadCount(0);
+      return;
+    }
+
+    const requestsRef = collection(db, "friend_requests");
+
+    const requestsQuery = query(
+      requestsRef,
       where("destinatarioId", "==", user.uid),
       where("status", "==", "pendente")
     );
 
     const unsubscribe = onSnapshot(
-      q,
+      requestsQuery,
       (snapshot) => {
-        setUnreadCount(snapshot.docs.length);
+        setUnreadCount(snapshot.size);
       },
-      (err) => console.error("Erro ao carregar notificações:", err)
+      (error) => {
+        console.error(
+          "Erro ao carregar pedidos de amizade:",
+          error
+        );
+
+        setUnreadCount(0);
+      }
     );
 
     return () => unsubscribe();
   }, [user]);
 
+  // ============================================================
+  // FECHAR MENU AO MUDAR DE PÁGINA
+  // ============================================================
+
+  useEffect(() => {
+    setShowCreateMenu(false);
+  }, [location.pathname]);
+
   return (
     <>
-      {/* 1. NAVBAR SUPERIOR */}
+      {/* ======================================================
+          NAVBAR SUPERIOR
+      ====================================================== */}
+
       <header className="fixed top-0 inset-x-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between z-40 shadow-sm">
-        
-        {/* Lado Esquerdo: Logótipo + Criar Conteúdo */}
+
+        {/* LOGÓTIPO + CRIAR */}
+
         <div className="flex items-center gap-3">
-          <button 
-            onClick={() => navigate("/home")} 
+
+          <button
+            onClick={() => navigate("/home")}
             className="text-2xl font-extrabold tracking-tight cursor-pointer"
+            aria-label="KonnexVib"
           >
-            <span className="text-gray-900">Konnex</span>
-            <span className="text-[#635BFF]">Vib</span>
+            <span className="text-gray-900">
+              Konnex
+            </span>
+
+            <span className="text-[#635BFF]">
+              Vib
+            </span>
           </button>
 
-          {/* Menu Suspenso de Criação Rápida */}
+          {/* MENU CRIAR */}
+
           <div className="relative">
+
             <button
-              onClick={() => setShowCreateMenu(!showCreateMenu)}
+              onClick={() =>
+                setShowCreateMenu((prev) => !prev)
+              }
               className="w-9 h-9 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-800 transition"
-              title="Criar Conteúdo"
+              title="Criar conteúdo"
+              aria-label="Criar conteúdo"
             >
               <FaPlus size={14} />
             </button>
 
             {showCreateMenu && (
               <div className="absolute left-0 mt-2 w-48 bg-white rounded-2xl shadow-xl border border-gray-100 py-2 z-50">
-                <button 
-                  onClick={() => { navigate("/create-post"); setShowCreateMenu(false); }} 
+
+                {/* PUBLICAÇÃO */}
+
+                <button
+                  onClick={() => {
+                    navigate("/create-post");
+                    setShowCreateMenu(false);
+                  }}
                   className="w-full px-4 py-2 flex items-center gap-3 text-sm font-semibold text-gray-700 hover:bg-purple-50 hover:text-[#635BFF] transition"
                 >
-                  <FaEdit size={16} /> Publicação
+                  <FaEdit size={16} />
+                  Publicação
                 </button>
-                <button 
-                  onClick={() => setShowCreateMenu(false)} 
+
+                {/* STORY */}
+
+                <button
+                  onClick={() => {
+                    navigate("/create-story");
+                    setShowCreateMenu(false);
+                  }}
                   className="w-full px-4 py-2 flex items-center gap-3 text-sm font-semibold text-gray-700 hover:bg-purple-50 hover:text-[#635BFF] transition"
                 >
-                  <FaHistory size={16} /> História
+                  <FaHistory size={16} />
+                  História
                 </button>
-                <button 
-                  onClick={() => setShowCreateMenu(false)} 
+
+                {/* REEL */}
+
+                <button
+                  onClick={() => {
+                    navigate("/create-reel");
+                    setShowCreateMenu(false);
+                  }}
                   className="w-full px-4 py-2 flex items-center gap-3 text-sm font-semibold text-gray-700 hover:bg-purple-50 hover:text-[#635BFF] transition"
                 >
-                  <FaVideo size={16} /> Reel
+                  <FaVideo size={16} />
+                  Reel
                 </button>
-                <button 
-                  onClick={() => setShowCreateMenu(false)} 
+
+                {/* NOTA */}
+
+                <button
+                  onClick={() => {
+                    navigate("/create-note");
+                    setShowCreateMenu(false);
+                  }}
                   className="w-full px-4 py-2 flex items-center gap-3 text-sm font-semibold text-gray-700 hover:bg-purple-50 hover:text-[#635BFF] transition"
                 >
-                  <FaStickyNote size={16} /> Nota
+                  <FaStickyNote size={16} />
+                  Nota
                 </button>
+
               </div>
             )}
+
           </div>
         </div>
 
-        {/* Lado Direito: Pesquisa, Mensagens e Notificações */}
+        {/* ====================================================
+            LADO DIREITO
+        ==================================================== */}
+
         <div className="flex items-center gap-2">
-          <button 
-            onClick={() => navigate("/search")} 
+
+          {/* PESQUISA */}
+
+          <button
+            onClick={() => navigate("/search")}
             className="w-10 h-10 rounded-full flex items-center justify-center text-gray-800 hover:bg-gray-100 transition"
+            aria-label="Pesquisar"
           >
             <FaSearch size={18} />
           </button>
 
-          <button 
-            onClick={() => navigate("/chat")} 
+          {/* MENSAGENS */}
+
+          <button
+            onClick={() => navigate("/chat")}
             className="relative w-10 h-10 rounded-full flex items-center justify-center text-gray-800 hover:bg-gray-100 transition"
+            aria-label="Mensagens"
           >
             <FaRegComment size={20} />
-            <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-              3
-            </span>
           </button>
 
-          <button 
-            onClick={() => navigate("/notifications")} 
+          {/* NOTIFICAÇÕES */}
+
+          <button
+            onClick={() => navigate("/notifications")}
             className="relative w-10 h-10 rounded-full flex items-center justify-center text-gray-800 hover:bg-gray-100 transition"
+            aria-label="Notificações"
           >
             <FaRegBell size={20} />
-            {unreadCount > 0 ? (
-              <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-pulse">
+
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold min-w-4 h-4 px-1 rounded-full flex items-center justify-center">
                 {unreadCount > 9 ? "9+" : unreadCount}
-              </span>
-            ) : (
-              <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                12
               </span>
             )}
           </button>
+
         </div>
+
       </header>
 
-      {/* 2. BARRA DE NAVEGAÇÃO INFERIOR (Bottom Bar) */}
+      {/* ======================================================
+          NAVEGAÇÃO INFERIOR
+      ====================================================== */}
+
       <nav className="fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 px-6 py-2 flex items-center justify-between z-50">
-        
-        {/* Início */}
-        <button 
-          onClick={() => navigate("/home")} 
-          className={`flex flex-col items-center transition ${location.pathname === "/home" || location.pathname === "/" ? "text-[#635BFF]" : "text-gray-400 hover:text-gray-600"}`}
+
+        {/* INÍCIO */}
+
+        <button
+          onClick={() => navigate("/home")}
+          className={`flex flex-col items-center transition ${
+            location.pathname === "/home" ||
+            location.pathname === "/"
+              ? "text-[#635BFF]"
+              : "text-gray-400 hover:text-gray-600"
+          }`}
         >
           <FaHome size={22} />
-          <span className="text-[10px] font-bold mt-0.5">Início</span>
+
+          <span className="text-[10px] font-bold mt-0.5">
+            Início
+          </span>
         </button>
 
-        {/* Descobrir / Pesquisa */}
-        <button 
-          onClick={() => navigate("/search")} 
-          className={`flex flex-col items-center transition ${location.pathname === "/search" ? "text-[#635BFF]" : "text-gray-400 hover:text-gray-600"}`}
+        {/* DESCOBRIR */}
+
+        <button
+          onClick={() => navigate("/search")}
+          className={`flex flex-col items-center transition ${
+            location.pathname === "/search"
+              ? "text-[#635BFF]"
+              : "text-gray-400 hover:text-gray-600"
+          }`}
         >
           <FaCompass size={22} />
-          <span className="text-[10px] font-medium mt-0.5">Descobrir</span>
+
+          <span className="text-[10px] font-medium mt-0.5">
+            Descobrir
+          </span>
         </button>
 
-        {/* Botão Flutuante Central (+) */}
-        <button 
+        {/* CRIAR */}
+
+        <button
           onClick={() => navigate("/create-post")}
           className="w-12 h-12 rounded-full bg-[#3B28CC] text-white flex items-center justify-center shadow-lg hover:scale-105 transition -mt-5 border-4 border-white"
+          aria-label="Criar publicação"
         >
           <FaPlus size={18} />
         </button>
 
-        {/* Mensagens */}
-        <button 
-          onClick={() => navigate("/chat")} 
-          className={`relative flex flex-col items-center transition ${location.pathname === "/chat" ? "text-[#635BFF]" : "text-gray-400 hover:text-gray-600"}`}
+        {/* MENSAGENS */}
+
+        <button
+          onClick={() => navigate("/chat")}
+          className={`relative flex flex-col items-center transition ${
+            location.pathname === "/chat"
+              ? "text-[#635BFF]"
+              : "text-gray-400 hover:text-gray-600"
+          }`}
         >
           <FaRegComment size={22} />
-          <span className="absolute -top-1 right-1 bg-red-500 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-            2
+
+          <span className="text-[10px] font-medium mt-0.5">
+            Mensagens
           </span>
-          <span className="text-[10px] font-medium mt-0.5">Mensagens</span>
         </button>
 
-        {/* Perfil */}
-        <button 
-          onClick={() => navigate("/profile")} 
-          className={`flex flex-col items-center transition ${location.pathname === "/profile" ? "text-[#635BFF]" : "text-gray-400 hover:text-gray-600"}`}
+        {/* PERFIL */}
+
+        <button
+          onClick={() => navigate("/profile")}
+          className={`flex flex-col items-center transition ${
+            location.pathname.startsWith("/profile")
+              ? "text-[#635BFF]"
+              : "text-gray-400 hover:text-gray-600"
+          }`}
         >
           <FaRegUser size={22} />
-          <span className="text-[10px] font-medium mt-0.5">Perfil</span>
+
+          <span className="text-[10px] font-medium mt-0.5">
+            Perfil
+          </span>
         </button>
 
       </nav>
