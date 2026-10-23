@@ -1,0 +1,1365 @@
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  Crown,
+  Sparkles,
+  Lock,
+  ChevronRight,
+  Unlock,
+  Star,
+  MessageCircle,
+  Video,
+  Clock,
+  ShieldCheck,
+  CheckCircle2,
+  AlertTriangle,
+  UserCheck,
+  CalendarDays,
+  Loader2,
+  ExternalLink,
+  XCircle,
+} from "lucide-react";
+
+import { auth, db } from "../firebase";
+
+import {
+  doc,
+  onSnapshot,
+  collection,
+  query,
+  where,
+  orderBy,
+  onSnapshot as onCollectionSnapshot,
+} from "firebase/firestore";
+
+import PaymentModal from "../Components/PaymentModal";
+
+/*
+|--------------------------------------------------------------------------
+| CONFIGURAÇÃO
+|--------------------------------------------------------------------------
+|
+| Esta página NÃO decide se o utilizador é adulto ou VIP.
+|
+| A autorização real deve vir do backend/Firebase depois de:
+|
+| 1. Conta autenticada
+| 2. Data de nascimento registada
+| 3. Processo real de age assurance concluído
+| 4. Backend receber/validar o resultado
+| 5. Backend gravar ageVerified
+| 6. Pagamento/subscrição confirmados
+| 7. Backend autorizar o acesso VIP
+|
+|--------------------------------------------------------------------------
+*/
+
+const AGE_ASSURANCE_START_URL =
+  import.meta.env.VITE_AGE_ASSURANCE_START_URL || "";
+
+const VIP_CHECKOUT_URL =
+  import.meta.env.VITE_VIP_CHECKOUT_URL || "";
+
+const roomsFallback = [
+  {
+    id: "principal",
+    name: "Sala VIP Principal",
+    description: "Conversa exclusiva entre membros VIP.",
+    members: 128,
+    online: 34,
+    icon: Crown,
+  },
+  {
+    id: "musica",
+    name: "VIP Música",
+    description: "Partilhe música e descubra novos artistas.",
+    members: 96,
+    online: 21,
+    icon: Star,
+  },
+  {
+    id: "conversas",
+    name: "VIP Conversas",
+    description: "Conversas privadas e encontros da comunidade.",
+    members: 74,
+    online: 18,
+    icon: MessageCircle,
+  },
+  {
+    id: "videos",
+    name: "VIP Vídeos",
+    description: "Conteúdo exclusivo em vídeo.",
+    members: 63,
+    online: 12,
+    icon: Video,
+  },
+];
+
+const formatDate = (value) => {
+  if (!value) return "—";
+
+  try {
+    const date =
+      typeof value?.toDate === "function"
+        ? value.toDate()
+        : new Date(value);
+
+    if (Number.isNaN(date.getTime())) return "—";
+
+    return date.toLocaleDateString("pt-PT", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+  } catch {
+    return "—";
+  }
+};
+
+const calculateAge = (dateOfBirth) => {
+  if (!dateOfBirth) return null;
+
+  const birthDate = new Date(dateOfBirth);
+
+  if (Number.isNaN(birthDate.getTime())) return null;
+
+  const today = new Date();
+
+  let age = today.getFullYear() - birthDate.getFullYear();
+
+  const monthDifference = today.getMonth() - birthDate.getMonth();
+
+  if (
+    monthDifference < 0 ||
+    (monthDifference === 0 &&
+      today.getDate() < birthDate.getDate())
+  ) {
+    age--;
+  }
+
+  return age >= 0 ? age : null;
+};
+
+const normalizeBoolean = (value) => {
+  return value === true;
+};
+
+export default function SalaVIP() {
+  const currentUser = auth?.currentUser;
+
+  const [userData, setUserData] = useState(null);
+  const [vipData, setVipData] = useState(null);
+  const [rooms, setRooms] = useState(roomsFallback);
+
+  const [loadingUser, setLoadingUser] = useState(true);
+  const [loadingVip, setLoadingVip] = useState(true);
+  const [loadingRooms, setLoadingRooms] = useState(true);
+
+  const [modalAberto, setModalAberto] = useState(false);
+
+  const [startingVerification, setStartingVerification] =
+    useState(false);
+
+  const [verificationError, setVerificationError] =
+    useState("");
+
+  /*
+  |--------------------------------------------------------------------------
+  | UTILIZADOR
+  |--------------------------------------------------------------------------
+  */
+
+  useEffect(() => {
+    if (!currentUser?.uid) {
+      setUserData(null);
+      setLoadingUser(false);
+      return undefined;
+    }
+
+    setLoadingUser(true);
+
+    const userRef = doc(db, "users", currentUser.uid);
+
+    const unsubscribe = onSnapshot(
+      userRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          setUserData({
+            id: snapshot.id,
+            ...snapshot.data(),
+          });
+        } else {
+          setUserData({
+            id: currentUser.uid,
+            email: currentUser.email || "",
+            phone: currentUser.phoneNumber || "",
+          });
+        }
+
+        setLoadingUser(false);
+      },
+      (error) => {
+        console.error(
+          "Erro ao carregar perfil do utilizador:",
+          error
+        );
+
+        setLoadingUser(false);
+      }
+    );
+
+    return unsubscribe;
+  }, [currentUser?.uid]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | VIP / AGE VERIFICATION
+  |--------------------------------------------------------------------------
+  |
+  | Estrutura esperada:
+  |
+  | vip/{uid}
+  |
+  | {
+  |   enabled: true,
+  |   ageVerified: true,
+  |   verificationStatus: "verified",
+  |   verifiedAt: Timestamp,
+  |   subscriptionStatus: "active",
+  |   plan: "monthly",
+  |   expiresAt: Timestamp
+  | }
+  |
+  */
+
+  useEffect(() => {
+    if (!currentUser?.uid) {
+      setVipData(null);
+      setLoadingVip(false);
+      return undefined;
+    }
+
+    setLoadingVip(true);
+
+    const vipRef = doc(db, "vip", currentUser.uid);
+
+    const unsubscribe = onSnapshot(
+      vipRef,
+      (snapshot) => {
+        if (snapshot.exists()) {
+          setVipData({
+            id: snapshot.id,
+            ...snapshot.data(),
+          });
+        } else {
+          setVipData(null);
+        }
+
+        setLoadingVip(false);
+      },
+      (error) => {
+        console.error(
+          "Erro ao carregar estado VIP:",
+          error
+        );
+
+        setVipData(null);
+        setLoadingVip(false);
+      }
+    );
+
+    return unsubscribe;
+  }, [currentUser?.uid]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | SALAS
+  |--------------------------------------------------------------------------
+  |
+  | Quando a coleção vipRooms existir, será usada.
+  | Enquanto não existir, usamos os dados visuais aprovados.
+  |
+  */
+
+  useEffect(() => {
+    const roomsRef = collection(db, "vipRooms");
+
+    const roomsQuery = query(
+      roomsRef,
+      where("active", "==", true),
+      orderBy("order", "asc")
+    );
+
+    const unsubscribe = onCollectionSnapshot(
+      roomsQuery,
+      (snapshot) => {
+        const firestoreRooms = snapshot.docs.map((item) => ({
+          id: item.id,
+          ...item.data(),
+        }));
+
+        if (firestoreRooms.length > 0) {
+          setRooms(firestoreRooms);
+        } else {
+          setRooms(roomsFallback);
+        }
+
+        setLoadingRooms(false);
+      },
+      (error) => {
+        console.warn(
+          "Coleção vipRooms ainda não está configurada. Usando salas padrão.",
+          error
+        );
+
+        setRooms(roomsFallback);
+        setLoadingRooms(false);
+      }
+    );
+
+    return unsubscribe;
+  }, []);
+
+  /*
+  |--------------------------------------------------------------------------
+  | ESTADOS REAIS
+  |--------------------------------------------------------------------------
+  */
+
+  const dateOfBirth = useMemo(() => {
+    return (
+      userData?.dateOfBirth ||
+      userData?.birthDate ||
+      userData?.dataNascimento ||
+      null
+    );
+  }, [userData]);
+
+  const calculatedAge = useMemo(() => {
+    return calculateAge(dateOfBirth);
+  }, [dateOfBirth]);
+
+  const isAdultByDob =
+    typeof calculatedAge === "number" && calculatedAge >= 18;
+
+  const ageVerified =
+    normalizeBoolean(vipData?.ageVerified) &&
+    vipData?.verificationStatus === "verified";
+
+  const accountVerified =
+    normalizeBoolean(userData?.accountVerified);
+
+  const subscriptionActive =
+    normalizeBoolean(vipData?.enabled) &&
+    (
+      vipData?.subscriptionStatus === "active" ||
+      vipData?.subscriptionStatus === "trialing"
+    );
+
+  const isVip = ageVerified && subscriptionActive;
+
+  const verificationPending =
+    vipData?.verificationStatus === "pending" ||
+    vipData?.verificationStatus === "processing";
+
+  const verificationRejected =
+    vipData?.verificationStatus === "rejected" ||
+    vipData?.verificationStatus === "failed";
+
+  const accessAllowed = isVip;
+
+  /*
+  |--------------------------------------------------------------------------
+  | ESTADO VISUAL
+  |--------------------------------------------------------------------------
+  */
+
+  const pageLoading =
+    loadingUser || loadingVip;
+
+  /*
+  |--------------------------------------------------------------------------
+  | AGE ASSURANCE REAL
+  |--------------------------------------------------------------------------
+  |
+  | O frontend NÃO valida a idade.
+  |
+  | Este botão inicia uma sessão no backend.
+  |
+  | O backend deverá:
+  |
+  | POST /api/age-assurance/session
+  |
+  | e devolver:
+  |
+  | {
+  |   url: "https://...",
+  |   sessionId: "..."
+  | }
+  |
+  | O provider escolhido será integrado posteriormente.
+  |
+  */
+
+  const handleStartAgeVerification = async () => {
+    setVerificationError("");
+
+    if (!currentUser?.uid) {
+      setVerificationError(
+        "É necessário iniciar sessão para continuar."
+      );
+      return;
+    }
+
+    if (!isAdultByDob) {
+      setVerificationError(
+        "A Sala VIP é reservada a utilizadores com 18 anos ou mais."
+      );
+      return;
+    }
+
+    if (!AGE_ASSURANCE_START_URL) {
+      setVerificationError(
+        "O serviço de verificação de idade ainda não foi configurado. Primeiro precisamos ligar o provedor de age assurance ao backend."
+      );
+      return;
+    }
+
+    try {
+      setStartingVerification(true);
+
+      const idToken = await currentUser.getIdToken();
+
+      const response = await fetch(
+        AGE_ASSURANCE_START_URL,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            uid: currentUser.uid,
+            returnUrl: window.location.href,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          "Não foi possível iniciar a verificação de idade."
+        );
+      }
+
+      const data = await response.json();
+
+      if (!data?.url) {
+        throw new Error(
+          "O serviço de verificação não devolveu um endereço válido."
+        );
+      }
+
+      window.location.href = data.url;
+    } catch (error) {
+      console.error(
+        "Erro ao iniciar age assurance:",
+        error
+      );
+
+      setVerificationError(
+        error?.message ||
+          "Não foi possível iniciar a verificação de idade."
+      );
+    } finally {
+      setStartingVerification(false);
+    }
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | PAGAMENTO / VIP
+  |--------------------------------------------------------------------------
+  */
+
+  const handleOpenPayment = () => {
+    if (!currentUser?.uid) {
+      alert(
+        "Inicie sessão na sua conta KonnexVib para continuar."
+      );
+      return;
+    }
+
+    if (!ageVerified) {
+      setVerificationError(
+        "A verificação de idade deve ser concluída antes da subscrição VIP."
+      );
+      return;
+    }
+
+    if (VIP_CHECKOUT_URL) {
+      window.location.href = VIP_CHECKOUT_URL;
+      return;
+    }
+
+    setModalAberto(true);
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | ENTRAR NA SALA
+  |--------------------------------------------------------------------------
+  */
+
+  const handleEnterRoom = (room) => {
+    if (!currentUser?.uid) {
+      alert(
+        "Inicie sessão para aceder à Sala VIP."
+      );
+      return;
+    }
+
+    if (!ageVerified) {
+      setVerificationError(
+        "É necessário concluir a verificação de idade para entrar nas salas VIP."
+      );
+      return;
+    }
+
+    if (!subscriptionActive) {
+      setVerificationError(
+        "É necessária uma subscrição VIP ativa para entrar nesta sala."
+      );
+      return;
+    }
+
+    /*
+     * IMPORTANTE:
+     *
+     * Aqui não concedemos autorização localmente.
+     *
+     * A página da sala correspondente também deverá
+     * verificar a autorização através das regras/backend.
+     */
+
+    if (room?.route) {
+      window.location.href = room.route;
+      return;
+    }
+
+    if (room?.url) {
+      window.location.href = room.url;
+      return;
+    }
+
+    alert(
+      `${room.name} está preparada para receber o módulo de sala em tempo real.`
+    );
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | STATUS
+  |--------------------------------------------------------------------------
+  */
+
+  const status = useMemo(() => {
+    if (pageLoading) {
+      return {
+        type: "loading",
+        title: "A verificar acesso",
+        description:
+          "Estamos a carregar o estado seguro da sua conta.",
+      };
+    }
+
+    if (!currentUser) {
+      return {
+        type: "login",
+        title: "Inicie sessão",
+        description:
+          "Entre na sua conta KonnexVib para utilizar a Sala VIP.",
+      };
+    }
+
+    if (!dateOfBirth) {
+      return {
+        type: "dob",
+        title: "Data de nascimento necessária",
+        description:
+          "Adicione a sua data de nascimento ao perfil antes de solicitar acesso VIP.",
+      };
+    }
+
+    if (!isAdultByDob) {
+      return {
+        type: "minor",
+        title: "Acesso VIP indisponível",
+        description:
+          "A Sala VIP é exclusiva para utilizadores com 18 anos ou mais.",
+      };
+    }
+
+    if (verificationPending) {
+      return {
+        type: "pending",
+        title: "Verificação em andamento",
+        description:
+          "A sua verificação de idade está a ser processada.",
+      };
+    }
+
+    if (verificationRejected) {
+      return {
+        type: "rejected",
+        title: "Verificação não concluída",
+        description:
+          "A verificação de idade não foi aprovada. Pode iniciar uma nova tentativa quando o serviço permitir.",
+      };
+    }
+
+    if (!ageVerified) {
+      return {
+        type: "age",
+        title: "Verificação de idade necessária",
+        description:
+          "Conclua a verificação de idade através do nosso provedor de age assurance.",
+      };
+    }
+
+    if (!subscriptionActive) {
+      return {
+        type: "payment",
+        title: "Ative o seu acesso VIP",
+        description:
+          "A idade foi verificada. Agora pode escolher uma subscrição VIP.",
+      };
+    }
+
+    return {
+      type: "active",
+      title: "Acesso VIP ativo",
+      description:
+        "A sua conta está autorizada para a área VIP.",
+    };
+  }, [
+    pageLoading,
+    currentUser,
+    dateOfBirth,
+    isAdultByDob,
+    verificationPending,
+    verificationRejected,
+    ageVerified,
+    subscriptionActive,
+  ]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | LOADING
+  |--------------------------------------------------------------------------
+  */
+
+  if (pageLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center px-6">
+        <div className="w-full max-w-md rounded-3xl bg-white border border-slate-200 shadow-sm p-8 text-center">
+          <div className="mx-auto mb-5 w-14 h-14 rounded-2xl bg-[#635BFF]/10 flex items-center justify-center">
+            <Loader2
+              className="w-7 h-7 text-[#635BFF] animate-spin"
+            />
+          </div>
+
+          <h1 className="text-xl font-bold text-slate-900">
+            Sala VIP
+          </h1>
+
+          <p className="mt-2 text-sm text-slate-500">
+            A verificar o estado seguro da sua conta...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  /*
+  |--------------------------------------------------------------------------
+  | RENDER
+  |--------------------------------------------------------------------------
+  */
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-24">
+      {/* ================================================================
+          HERO
+      ================================================================ */}
+
+      <section className="relative overflow-hidden bg-gradient-to-br from-[#635BFF] via-[#7c3aed] to-[#9333ea]">
+        <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-white/10 blur-3xl" />
+
+        <div className="absolute -bottom-32 -left-24 w-80 h-80 rounded-full bg-fuchsia-300/10 blur-3xl" />
+
+        <div className="relative max-w-5xl mx-auto px-5 py-8 sm:px-8 sm:py-12">
+          <div className="flex items-center justify-between gap-4 mb-8">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur-md flex items-center justify-center border border-white/20">
+                <Crown className="w-6 h-6 text-white" />
+              </div>
+
+              <div>
+                <p className="text-white/70 text-xs font-medium">
+                  KonnexVib
+                </p>
+
+                <h1 className="text-white text-xl sm:text-2xl font-black">
+                  Sala VIP
+                </h1>
+              </div>
+            </div>
+
+            {isVip && (
+              <div className="flex items-center gap-2 rounded-full bg-white/15 border border-white/20 backdrop-blur-md px-3 py-2">
+                <CheckCircle2 className="w-4 h-4 text-white" />
+
+                <span className="text-white text-xs font-bold">
+                  VIP ativo
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="max-w-3xl">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 border border-white/20 px-3 py-1.5 mb-4">
+              <Sparkles className="w-4 h-4 text-white" />
+
+              <span className="text-xs font-semibold text-white">
+                Área exclusiva KonnexVib
+              </span>
+            </div>
+
+            <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white leading-tight">
+              Experiências reservadas para membros VIP.
+            </h2>
+
+            <p className="mt-4 max-w-2xl text-sm sm:text-base text-white/80 leading-6">
+              Conteúdos exclusivos, conversas privadas e
+              experiências especiais dentro do KonnexVib.
+            </p>
+
+            <div className="mt-7 flex flex-col sm:flex-row gap-3">
+              {!isVip && status.type !== "minor" && (
+                <button
+                  type="button"
+                  onClick={
+                    ageVerified
+                      ? handleOpenPayment
+                      : handleStartAgeVerification
+                  }
+                  disabled={startingVerification}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white text-[#635BFF] px-5 py-3.5 font-bold text-sm shadow-lg shadow-black/10 hover:bg-slate-50 transition disabled:opacity-60"
+                >
+                  {startingVerification ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      A iniciar verificação...
+                    </>
+                  ) : ageVerified ? (
+                    <>
+                      <Crown className="w-5 h-5" />
+                      Entrar no VIP
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-5 h-5" />
+                      Verificar idade
+                    </>
+                  )}
+                </button>
+              )}
+
+              {isVip && (
+                <div className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white/15 border border-white/20 text-white px-5 py-3.5 font-bold text-sm">
+                  <Unlock className="w-5 h-5" />
+                  Acesso VIP ativo
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ================================================================
+          SEGURANÇA
+      ================================================================ */}
+
+      <main className="max-w-5xl mx-auto px-5 sm:px-8">
+        <section className="mt-5 rounded-3xl bg-white border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-5 sm:p-6">
+            <div className="flex items-start gap-4">
+              <div className="w-11 h-11 shrink-0 rounded-2xl bg-[#635BFF]/10 flex items-center justify-center">
+                <ShieldCheck className="w-5 h-5 text-[#635BFF]" />
+              </div>
+
+              <div className="flex-1">
+                <h3 className="font-extrabold text-slate-900">
+                  Segurança e acesso reservado
+                </h3>
+
+                <p className="mt-1 text-sm text-slate-500 leading-6">
+                  A Sala VIP utiliza autenticação, verificação de
+                  idade e autorização de subscrição. A idade não é
+                  considerada verificada apenas através de uma
+                  declaração ou de uma fotografia.
+                </p>
+
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <SecurityItem
+                    icon={UserCheck}
+                    title="Conta"
+                    active={accountVerified}
+                  />
+
+                  <SecurityItem
+                    icon={ShieldCheck}
+                    title="Idade"
+                    active={ageVerified}
+                  />
+
+                  <SecurityItem
+                    icon={Crown}
+                    title="VIP"
+                    active={subscriptionActive}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ================================================================
+            STATUS / VERIFICAÇÃO
+        ================================================================ */}
+
+        <section className="mt-5">
+          <div
+            className={`rounded-3xl border overflow-hidden ${
+              status.type === "active"
+                ? "bg-emerald-50 border-emerald-200"
+                : status.type === "minor"
+                ? "bg-red-50 border-red-200"
+                : status.type === "rejected"
+                ? "bg-amber-50 border-amber-200"
+                : "bg-white border-slate-200"
+            }`}
+          >
+            <div className="p-5 sm:p-6">
+              <div className="flex items-start gap-4">
+                <StatusIcon type={status.type} />
+
+                <div className="flex-1">
+                  <h2 className="font-extrabold text-slate-900">
+                    {status.title}
+                  </h2>
+
+                  <p className="mt-1 text-sm text-slate-600 leading-6">
+                    {status.description}
+                  </p>
+
+                  {dateOfBirth && (
+                    <div className="mt-4 flex flex-wrap gap-3">
+                      <InfoBadge
+                        icon={CalendarDays}
+                        label={`Nascimento: ${formatDate(
+                          dateOfBirth
+                        )}`}
+                      />
+
+                      {calculatedAge !== null && (
+                        <InfoBadge
+                          icon={UserCheck}
+                          label={`Idade calculada: ${calculatedAge} anos`}
+                        />
+                      )}
+                    </div>
+                  )}
+
+                  {verificationError && (
+                    <div className="mt-4 flex items-start gap-3 rounded-2xl bg-red-100 border border-red-200 p-4">
+                      <XCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+
+                      <p className="text-sm text-red-700 leading-5">
+                        {verificationError}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="mt-5 flex flex-col sm:flex-row gap-3">
+                    {status.type === "age" && (
+                      <button
+                        type="button"
+                        onClick={handleStartAgeVerification}
+                        disabled={startingVerification}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#635BFF] text-white px-5 py-3 font-bold text-sm hover:bg-[#554ff0] transition disabled:opacity-60"
+                      >
+                        {startingVerification ? (
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            A iniciar...
+                          </>
+                        ) : (
+                          <>
+                            <ShieldCheck className="w-5 h-5" />
+                            Iniciar verificação de idade
+                          </>
+                        )}
+                      </button>
+                    )}
+
+                    {status.type === "rejected" && (
+                      <button
+                        type="button"
+                        onClick={handleStartAgeVerification}
+                        disabled={startingVerification}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#635BFF] text-white px-5 py-3 font-bold text-sm hover:bg-[#554ff0] transition disabled:opacity-60"
+                      >
+                        <ShieldCheck className="w-5 h-5" />
+                        Tentar novamente
+                      </button>
+                    )}
+
+                    {status.type === "payment" && (
+                      <button
+                        type="button"
+                        onClick={handleOpenPayment}
+                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#635BFF] text-white px-5 py-3 font-bold text-sm hover:bg-[#554ff0] transition"
+                      >
+                        <Crown className="w-5 h-5" />
+                        Ativar VIP
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ================================================================
+            ACESSO RESERVADO
+        ================================================================ */}
+
+        {!accessAllowed && (
+          <section className="mt-5">
+            <div className="relative overflow-hidden rounded-3xl bg-slate-900 text-white">
+              <div className="absolute inset-0 bg-gradient-to-br from-[#635BFF]/30 via-transparent to-purple-500/10" />
+
+              <div className="relative p-6 sm:p-8">
+                <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/10 flex items-center justify-center mb-5">
+                  <Lock className="w-6 h-6 text-white" />
+                </div>
+
+                <h2 className="text-xl sm:text-2xl font-black">
+                  Acesso reservado aos membros VIP
+                </h2>
+
+                <p className="mt-2 text-sm text-white/60 max-w-2xl leading-6">
+                  As salas e conteúdos VIP permanecem bloqueados
+                  até que a conta tenha idade verificada e uma
+                  subscrição válida.
+                </p>
+
+                <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Requirement
+                    number="01"
+                    title="Conta KonnexVib"
+                    done={Boolean(currentUser)}
+                  />
+
+                  <Requirement
+                    number="02"
+                    title="18 anos ou mais"
+                    done={isAdultByDob}
+                  />
+
+                  <Requirement
+                    number="03"
+                    title="Idade verificada"
+                    done={ageVerified}
+                  />
+
+                  <Requirement
+                    number="04"
+                    title="Subscrição VIP"
+                    done={subscriptionActive}
+                  />
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ================================================================
+            SALAS VIP
+        ================================================================ */}
+
+        {accessAllowed && (
+          <section className="mt-8">
+            <div className="flex items-end justify-between gap-4 mb-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-[#635BFF]">
+                  Área exclusiva
+                </p>
+
+                <h2 className="mt-1 text-2xl font-black text-slate-900">
+                  Salas VIP
+                </h2>
+
+                <p className="mt-1 text-sm text-slate-500">
+                  Escolha uma experiência para entrar.
+                </p>
+              </div>
+
+              <div className="hidden sm:flex items-center gap-2 text-xs font-semibold text-emerald-600">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                Acesso autorizado
+              </div>
+            </div>
+
+            {loadingRooms ? (
+              <div className="rounded-3xl bg-white border border-slate-200 p-8 flex justify-center">
+                <Loader2 className="w-6 h-6 text-[#635BFF] animate-spin" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {rooms.map((room) => (
+                  <VipRoomCard
+                    key={room.id}
+                    room={room}
+                    onEnter={() => handleEnterRoom(room)}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ================================================================
+            PRIVACIDADE
+        ================================================================ */}
+
+        <section className="mt-8">
+          <div className="rounded-3xl bg-white border border-slate-200 p-5 sm:p-6">
+            <div className="flex items-start gap-4">
+              <div className="w-11 h-11 rounded-2xl bg-slate-100 flex items-center justify-center shrink-0">
+                <Lock className="w-5 h-5 text-slate-700" />
+              </div>
+
+              <div>
+                <h3 className="font-extrabold text-slate-900">
+                  Privacidade e segurança
+                </h3>
+
+                <p className="mt-2 text-sm text-slate-500 leading-6">
+                  Os dados utilizados para verificação devem ser
+                  tratados pelo provedor de age assurance e pelo
+                  backend de acordo com a política de privacidade
+                  do KonnexVib e os requisitos legais aplicáveis.
+                </p>
+
+                <div className="mt-4 flex items-center gap-2 text-xs font-semibold text-slate-500">
+                  <ShieldCheck className="w-4 h-4" />
+                  Acesso protegido por autenticação e autorização.
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ================================================================
+            INFORMAÇÃO DO ESTADO VIP
+        ================================================================ */}
+
+        {isVip && (
+          <section className="mt-5">
+            <div className="rounded-3xl bg-white border border-slate-200 p-5">
+              <div className="flex items-start gap-4">
+                <div className="w-11 h-11 rounded-2xl bg-emerald-50 flex items-center justify-center">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                </div>
+
+                <div className="flex-1">
+                  <h3 className="font-extrabold">
+                    Membro VIP verificado
+                  </h3>
+
+                  <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <MiniStatus
+                      label="Idade"
+                      value="Verificada"
+                    />
+
+                    <MiniStatus
+                      label="Subscrição"
+                      value={
+                        vipData?.plan ||
+                        "VIP ativo"
+                      }
+                    />
+
+                    <MiniStatus
+                      label="Verificado em"
+                      value={formatDate(
+                        vipData?.verifiedAt
+                      )}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ================================================================
+            AVISO
+        ================================================================ */}
+
+        <section className="mt-6">
+          <div className="flex items-start gap-3 rounded-2xl bg-slate-100 border border-slate-200 p-4">
+            <AlertTriangle className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
+
+            <p className="text-xs text-slate-500 leading-5">
+              O acesso VIP é condicionado à autenticação, aos
+              requisitos de idade e à autorização da subscrição.
+              O estado apresentado nesta página não substitui as
+              regras de segurança do Firebase/backend.
+            </p>
+          </div>
+        </section>
+      </main>
+
+      {/* ================================================================
+          PAYMENT MODAL
+      ================================================================ */}
+
+      {modalAberto && (
+        <PaymentModal
+          isOpen={modalAberto}
+          onClose={() => setModalAberto(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| COMPONENTES
+|--------------------------------------------------------------------------
+*/
+
+function SecurityItem({
+  icon: Icon,
+  title,
+  active,
+}) {
+  return (
+    <div
+      className={`rounded-2xl border p-3 ${
+        active
+          ? "bg-emerald-50 border-emerald-200"
+          : "bg-slate-50 border-slate-200"
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <Icon
+          className={`w-4 h-4 ${
+            active
+              ? "text-emerald-600"
+              : "text-slate-400"
+          }`}
+        />
+
+        <span className="text-xs font-bold text-slate-700">
+          {title}
+        </span>
+
+        {active && (
+          <CheckCircle2 className="ml-auto w-4 h-4 text-emerald-600" />
+        )}
+      </div>
+
+      <p
+        className={`mt-1 text-[11px] font-semibold ${
+          active
+            ? "text-emerald-600"
+            : "text-slate-400"
+        }`}
+      >
+        {active ? "Confirmado" : "Pendente"}
+      </p>
+    </div>
+  );
+}
+
+function StatusIcon({ type }) {
+  const common =
+    "w-11 h-11 rounded-2xl flex items-center justify-center shrink-0";
+
+  if (type === "active") {
+    return (
+      <div className={`${common} bg-emerald-100`}>
+        <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+      </div>
+    );
+  }
+
+  if (type === "minor") {
+    return (
+      <div className={`${common} bg-red-100`}>
+        <Lock className="w-5 h-5 text-red-600" />
+      </div>
+    );
+  }
+
+  if (type === "pending") {
+    return (
+      <div className={`${common} bg-blue-100`}>
+        <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+      </div>
+    );
+  }
+
+  if (type === "rejected") {
+    return (
+      <div className={`${common} bg-amber-100`}>
+        <AlertTriangle className="w-5 h-5 text-amber-600" />
+      </div>
+    );
+  }
+
+  if (type === "payment") {
+    return (
+      <div className={`${common} bg-[#635BFF]/10`}>
+        <Crown className="w-5 h-5 text-[#635BFF]" />
+      </div>
+    );
+  }
+
+  return (
+    <div className={`${common} bg-[#635BFF]/10`}>
+      <ShieldCheck className="w-5 h-5 text-[#635BFF]" />
+    </div>
+  );
+}
+
+function InfoBadge({
+  icon: Icon,
+  label,
+}) {
+  return (
+    <div className="inline-flex items-center gap-2 rounded-xl bg-slate-100 border border-slate-200 px-3 py-2">
+      <Icon className="w-4 h-4 text-slate-500" />
+
+      <span className="text-xs font-semibold text-slate-600">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function Requirement({
+  number,
+  title,
+  done,
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl bg-white/5 border border-white/10 p-3">
+      <div
+        className={`w-9 h-9 rounded-xl flex items-center justify-center text-xs font-black ${
+          done
+            ? "bg-emerald-500/20 text-emerald-300"
+            : "bg-white/10 text-white/50"
+        }`}
+      >
+        {done ? (
+          <CheckCircle2 className="w-4 h-4" />
+        ) : (
+          number
+        )}
+      </div>
+
+      <span
+        className={`text-sm font-semibold ${
+          done
+            ? "text-white"
+            : "text-white/50"
+        }`}
+      >
+        {title}
+      </span>
+    </div>
+  );
+}
+
+function VipRoomCard({
+  room,
+  onEnter,
+}) {
+  const Icon = room.icon || Crown;
+
+  return (
+    <article className="group rounded-3xl bg-white border border-slate-200 p-5 shadow-sm hover:shadow-md hover:border-[#635BFF]/20 transition">
+      <div className="flex items-start gap-4">
+        <div className="w-12 h-12 rounded-2xl bg-[#635BFF]/10 flex items-center justify-center shrink-0">
+          <Icon className="w-5 h-5 text-[#635BFF]" />
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <h3 className="font-extrabold text-slate-900 truncate">
+            {room.name}
+          </h3>
+
+          <p className="mt-1 text-sm text-slate-500 leading-5">
+            {room.description}
+          </p>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-600">
+              <UserCheck className="w-3.5 h-3.5" />
+              {room.members ?? 0} membros
+            </span>
+
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-600">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              {room.online ?? 0} online
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={onEnter}
+        className="mt-5 w-full inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 text-white py-3 font-bold text-sm group-hover:bg-[#635BFF] transition"
+      >
+        Entrar na sala
+
+        <ChevronRight className="w-4 h-4" />
+      </button>
+    </article>
+  );
+}
+
+function MiniStatus({
+  label,
+  value,
+}) {
+  return (
+    <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3">
+      <p className="text-[11px] font-semibold text-slate-400">
+        {label}
+      </p>
+
+      <p className="mt-1 text-sm font-bold text-slate-800 capitalize">
+        {value}
+      </p>
+    </div>
+  );
+}

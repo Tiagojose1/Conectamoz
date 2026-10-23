@@ -1,50 +1,55 @@
-import { createContext, useContext, useEffect, useState } from "react";
-import { onAuthStateChanged } from "firebase/auth";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+
+import {
+  onAuthStateChanged,
+} from "firebase/auth";
+
 import { auth } from "../firebase";
 
-const AuthContext = createContext();
+const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-
-  const [usuario, setUsuario] = useState(null);
-  const [carregando, setCarregando] = useState(true);
-
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (user) => {
+        setCurrentUser(user || null);
+        setLoading(false);
+      },
+      (error) => {
+        console.error(
+          "Erro no Firebase Authentication:",
+          error
+        );
 
-    const cancelar = onAuthStateChanged(auth, (user) => {
+        setCurrentUser(null);
+        setLoading(false);
+      }
+    );
 
-      setUsuario(user);
-      setCarregando(false);
-
-    });
-
-
-    return () => cancelar();
-
+    return () => unsubscribe();
   }, []);
 
-
   return (
-
     <AuthContext.Provider
       value={{
-        usuario,
-        carregando
+        currentUser,
+        loading,
       }}
     >
-
       {children}
-
     </AuthContext.Provider>
-
   );
-
 }
 
-
 export function useAuth() {
-
   return useContext(AuthContext);
-
 }

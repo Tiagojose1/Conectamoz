@@ -1,162 +1,186 @@
 import React, { useState } from "react";
-import { db, auth } from "../firebase";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { FaMobileAlt, FaCheckCircle, FaLock } from "react-icons/fa";
+import {
+  FaMobileAlt,
+  FaCreditCard,
+  FaTimes,
+  FaLock,
+  FaQrcode,
+  FaCheck,
+  FaCopy,
+} from "react-icons/fa";
 
-export default function PagamentoModal({ valorPadrao = 100, aoConcluir }) {
-  const user = auth.currentUser;
+export default function PaymentModal({ efeito, onClose, onSuccess }) {
+  const [metodo, setMetodo] = useState("mpesa");
+  const [telefone, setTelefone] = useState("");
+  const [cartaoInfo, setCartaoInfo] = useState({ numero: "", validade: "", cvv: "" });
+  const [carregando, setCarregando] = useState(false);
+  const [pixCopiado, setPixCopiado] = useState(false);
 
-  const [metodo, setMetodo] = useState("mpesa"); // 'mpesa' ou 'emola'
-  const [numero, setNumero] = useState("");
-  const [valor, setValor] = useState(valorPadrao);
-  const [processando, setProcessando] = useState(false);
-  const [sucesso, setSucesso] = useState(false);
+  const NOME_PLATAFORMA = "Konnexvib";
+  const ENDERECO_PIX = "cd3cda04-be07-48f3-945e-501e2bc3e686";
+
+  const handleCopyPix = () => {
+    navigator.clipboard.writeText(ENDERECO_PIX);
+    setPixCopiado(true);
+    setTimeout(() => setPixCopiado(false), 2000);
+  };
 
   const handleProcessarPagamento = async (e) => {
     e.preventDefault();
-
-    // Validação simples de número de Moçambique (84/85 para M-Pesa, 86/87 para e-Mola)
-    const numLimpo = numero.replace(/\s+/g, "");
-    if (!/^(84|85|86|87)\d{7}$/.test(numLimpo)) {
-      alert("Por favor, insere um número válido de Moçambique (ex: 841234567).");
-      return;
-    }
-
-    setProcessando(true);
+    setCarregando(true);
 
     try {
-      // 1. Registar intenção/transação no Firestore
-      await addDoc(collection(db, "transacoes"), {
-        userId: user ? user.uid : "anonimo",
-        userEmail: user ? user.email : "",
-        metodo: metodo,
-        numeroTelefone: numLimpo,
-        valor: Number(valor),
-        moeda: "MZN",
-        status: "concluido", // Numa API real ficaria 'pendente' até ao webhook
-        criadoEm: serverTimestamp()
-      });
+      if (metodo === "mpesa" || metodo === "emola") {
+        console.log(`[${NOME_PLATAFORMA}] enviando cobrança Push para +258${telefone}`);
+      }
 
-      // Simulação do tempo de resposta da API de Pagamento
+      // Simulação da chamada da API
       setTimeout(() => {
-        setProcessando(false);
-        setSucesso(true);
-        if (aoConcluir) aoConcluir();
-      }, 2000);
-    } catch (err) {
-      console.error("Erro ao processar pagamento:", err);
-      alert("Ocorreu um erro ao iniciar a transação.");
-      setProcessando(false);
+        setCarregando(false);
+        onSuccess(efeito);
+        onClose();
+        alert(`Pagamento confirmado! Benefício ativado pela ${NOME_PLATAFORMA}.`);
+      }, 2500);
+    } catch (error) {
+      console.error("Erro na transação:", error);
+      setCarregando(false);
+      alert("Erro ao processar pagamento.");
     }
   };
 
   return (
-    <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm max-w-sm mx-auto">
-      <div className="flex items-center gap-2 pb-3 border-b border-gray-100 mb-4">
-        <FaLock className="text-emerald-600" size={16} />
-        <h3 className="font-bold text-gray-800 text-sm">Pagamento Móvel</h3>
-      </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4">
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl max-w-sm w-full p-5 text-white relative space-y-4">
+        <button 
+          onClick={onClose} 
+          className="absolute top-3 right-3 text-gray-400 hover:text-white transition"
+          aria-label="Fechar modal"
+        >
+          <FaTimes />
+        </button>
 
-      {sucesso ? (
-        <div className="text-center py-6 space-y-3">
-          <FaCheckCircle className="text-emerald-500 mx-auto" size={48} />
-          <h4 className="font-bold text-gray-800 text-base">Pagamento Concluído!</h4>
-          <p className="text-xs text-gray-500">
-            Confirma o PIN no teu telemóvel para autorizar a transação de {valor} MZN.
-          </p>
+        <div className="text-center space-y-1">
+          <FaLock className="text-yellow-500 mx-auto text-xl" />
+          <h3 className="font-bold text-sm">Comprar {efeito?.nome || "Item"}</h3>
+          <p className="text-xs text-yellow-400 font-bold">{efeito?.preco || "0.00 MT"}</p>
+        </div>
+
+        {/* Seleção de Métodos */}
+        <div className="grid grid-cols-3 gap-1.5 text-[11px]">
           <button
-            onClick={() => setSucesso(false)}
-            className="w-full mt-2 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl transition"
+            type="button"
+            onClick={() => setMetodo("mpesa")}
+            className={`p-2 rounded-xl flex flex-col items-center gap-1 border transition ${
+              metodo === "mpesa" ? "border-red-500 bg-red-500/10 text-white" : "border-gray-800 text-gray-400 hover:border-gray-700"
+            }`}
           >
-            Fazer Novo Pagamento
+            <FaMobileAlt className="text-red-500" /> M-Pesa
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMetodo("emola")}
+            className={`p-2 rounded-xl flex flex-col items-center gap-1 border transition ${
+              metodo === "emola" ? "border-orange-500 bg-orange-500/10 text-white" : "border-gray-800 text-gray-400 hover:border-gray-700"
+            }`}
+          >
+            <FaMobileAlt className="text-orange-400" /> e-Mola
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setMetodo("card")}
+            className={`p-2 rounded-xl flex flex-col items-center gap-1 border transition ${
+              metodo === "card" ? "border-blue-500 bg-blue-500/10 text-white" : "border-gray-800 text-gray-400 hover:border-gray-700"
+            }`}
+          >
+            <FaCreditCard className="text-blue-400" /> Cartão
           </button>
         </div>
-      ) : (
-        <form onSubmit={handleProcessarPagamento} className="space-y-4">
-          {/* Seleção da Carteira */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-              Escolhe a Carteira
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setMetodo("mpesa")}
-                className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition ${
-                  metodo === "mpesa"
-                    ? "border-red-500 bg-red-50 text-red-600"
-                    : "border-gray-200 text-gray-500 hover:bg-gray-50"
-                }`}
-              >
-                M-Pesa
-              </button>
 
-              <button
-                type="button"
-                onClick={() => setMetodo("emola")}
-                className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition ${
-                  metodo === "emola"
-                    ? "border-orange-500 bg-orange-50 text-orange-600"
-                    : "border-gray-200 text-gray-500 hover:bg-gray-50"
-                }`}
-              >
-                e-Mola
-              </button>
+        {/* Formulário Dinâmico */}
+        <form onSubmit={handleProcessarPagamento} className="space-y-3 pt-2">
+          {(metodo === "mpesa" || metodo === "emola") && (
+            <div className="space-y-2">
+              <div className="bg-gray-800/80 p-2.5 rounded-xl border border-gray-700 text-[11px] text-gray-300">
+                <p>📲 <strong>Cobrança {NOME_PLATAFORMA}:</strong> Insira o seu número. Receberá a notificação para digitar o PIN.</p>
+                <p className="text-[10px] text-yellow-400 mt-1 font-semibold">Destino: {NOME_PLATAFORMA}</p>
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-gray-400 mb-1">
+                  Número do Telemóvel ({metodo === "mpesa" ? "84 / 85" : "86 / 87"})
+                </label>
+                <div className="flex items-center bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs">
+                  <span className="text-gray-400 mr-2">+258</span>
+                  <input
+                    type="tel"
+                    maxLength={9}
+                    placeholder="8X XXX XXXX"
+                    value={telefone}
+                    onChange={(e) => setTelefone(e.target.value.replace(/\D/g, ""))}
+                    className="bg-transparent w-full outline-none text-white font-mono"
+                    required
+                  />
+                </div>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Número de Telefone */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">
-              Número de Telemóvel
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-2.5 text-gray-400 text-xs">
-                +258
-              </span>
-              <input
-                type="tel"
-                placeholder={metodo === "mpesa" ? "84 123 4567" : "86 123 4567"}
-                value={numero}
-                onChange={(e) => setNumero(e.target.value)}
-                maxLength={9}
-                required
-                className="w-full pl-12 pr-3 py-2 border border-gray-300 rounded-xl text-xs outline-none focus:border-emerald-500"
-              />
+          {metodo === "card" && (
+            <div className="space-y-2 text-[11px]">
+              <div>
+                <label className="block text-[10px] text-gray-400 mb-1">Número do Cartão</label>
+                <input
+                  type="text"
+                  placeholder="0000 0000 0000 0000"
+                  maxLength={19}
+                  value={cartaoInfo.numero}
+                  onChange={(e) => setCartaoInfo({ ...cartaoInfo, numero: e.target.value })}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs outline-none text-white font-mono"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] text-gray-400 mb-1">Validade</label>
+                  <input
+                    type="text"
+                    placeholder="MM/AA"
+                    maxLength={5}
+                    value={cartaoInfo.validade}
+                    onChange={(e) => setCartaoInfo({ ...cartaoInfo, validade: e.target.value })}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs outline-none text-white font-mono text-center"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-gray-400 mb-1">CVV</label>
+                  <input
+                    type="password"
+                    placeholder="123"
+                    maxLength={4}
+                    value={cartaoInfo.cvv}
+                    onChange={(e) => setCartaoInfo({ ...cartaoInfo, cvv: e.target.value })}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2 text-xs outline-none text-white font-mono text-center"
+                    required
+                  />
+                </div>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Valor */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">
-              Valor (MZN)
-            </label>
-            <input
-              type="number"
-              min="1"
-              value={valor}
-              onChange={(e) => setValor(e.target.value)}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-xl text-xs outline-none focus:border-emerald-500"
-            />
-          </div>
-
-          {/* Botão de Submissão */}
           <button
             type="submit"
-            disabled={processando || !numero.trim()}
-            className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-sm"
+            disabled={carregando}
+            className="w-full py-2.5 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs transition mt-2 cursor-pointer"
           >
-            {processando ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-            ) : (
-              <>
-                <FaMobileAlt size={14} /> Pagar {valor} MZN
-              </>
-            )}
+            {carregando
+              ? "Processando transação..."
+              : `Pagar à ${NOME_PLATAFORMA}`}
           </button>
         </form>
-      )}
+      </div>
     </div>
   );
 }

@@ -1,152 +1,33 @@
-import React, { useState, useEffect } from "react";
-import { db, auth } from "../firebase";
-import { collection, getDocs, addDoc, serverTimestamp } from "firebase/firestore";
-import { useNavigate } from "react-router-dom";
-import Navbar from "../Components/Navbar";
-import BottomNavigation from "../Components/BottomNavigation";
-import SearchBar from "../Components/SearchBar";
-import { FaComments } from "react-icons/fa";
+import React, { useState } from "react";
 
 export default function Search() {
-  const currentUser = auth.currentUser;
-  const navigate = useNavigate();
-
-  const [busca, setBusca] = useState("");
-  const [todosUsuarios, setTodosUsuarios] = useState([]);
-  const [usuariosFiltrados, setUsuariosFiltrados] = useState([]);
-  const [carregando, setCarregando] = useState(true);
-
-  // Carregar utilizadores
-  useEffect(() => {
-    const carregarUsuarios = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, "users"));
-        const lista = querySnapshot.docs
-          .map((doc) => {
-            const data = doc.data();
-            return {
-              id: doc.id,
-              uid: data.uid || doc.id,
-              nome: data.displayName || data.nome || data.email?.split("@")[0] || "Usuário",
-              email: data.email || "",
-              photoURL: data.photoURL || null,
-              ...data,
-            };
-          })
-          .filter((u) => u.uid !== currentUser?.uid && u.id !== currentUser?.uid);
-
-        setTodosUsuarios(lista);
-        setUsuariosFiltrados(lista);
-      } catch (error) {
-        console.error("Erro ao carregar utilizadores para pesquisa:", error);
-      } finally {
-        setCarregando(false);
-      }
-    };
-
-    carregarUsuarios();
-  }, [currentUser]);
-
-  // Filtrar utilizadores conforme digitação
-  useEffect(() => {
-    if (!busca.trim()) {
-      setUsuariosFiltrados(todosUsuarios);
-    } else {
-      const termo = busca.toLowerCase().trim();
-      const filtrados = todosUsuarios.filter(
-        (u) =>
-          (u.nome && u.nome.toLowerCase().includes(termo)) ||
-          (u.email && u.email.toLowerCase().includes(termo))
-      );
-      setUsuariosFiltrados(filtrados);
-    }
-  }, [busca, todosUsuarios]);
-
-  const handleIniciarConversa = async (outroUsuario) => {
-    if (!currentUser) return;
-
-    try {
-      const meuNome = currentUser.displayName || currentUser.email.split("@")[0];
-      const outroNome = outroUsuario.nome || outroUsuario.email.split("@")[0];
-
-      await addDoc(collection(db, "chats"), {
-        participantes: [currentUser.uid, outroUsuario.uid],
-        nomesParticipantes: {
-          [currentUser.uid]: meuNome,
-          [outroUsuario.uid]: outroNome,
-        },
-        criadoEm: serverTimestamp(),
-      });
-
-      navigate("/chat");
-    } catch (error) {
-      console.error("Erro ao iniciar conversa:", error);
-      navigate("/chat");
-    }
-  };
+  const [pesquisa, setPesquisa] = useState("");
 
   return (
-    <div className="min-h-screen bg-gray-100 pb-24">
-      <Navbar user={currentUser} />
+    <div className="min-h-screen bg-gray-100 p-4 pt-20">
+      <div className="mx-auto max-w-3xl">
+        <h1 className="text-2xl font-bold">Pesquisar</h1>
 
-      <main className="max-w-xl mx-auto pt-4 px-4 space-y-4">
-        <SearchBar 
-          value={busca} 
-          onChange={(e) => setBusca(e.target.value)} 
-          placeholder="Pesquisar por nome ou email..." 
+        <input
+          type="text"
+          value={pesquisa}
+          onChange={(e) => setPesquisa(e.target.value)}
+          placeholder="Pesquisar pessoas ou publicações..."
+          className="mt-5 w-full rounded-full border bg-white px-5 py-3 outline-none focus:border-[#635BFF]"
         />
 
-        <div className="space-y-2">
-          <h2 className="text-xs font-bold text-gray-500 uppercase px-1">
-            {busca ? `Resultados (${usuariosFiltrados.length})` : "Utilizadores Sugeridos"}
-          </h2>
+        {pesquisa && (
+          <div className="mt-5 rounded-xl bg-white p-5">
+            <p className="text-sm text-gray-500">
+              Resultados para:
+            </p>
 
-          {carregando ? (
-            <div className="text-center py-8 text-gray-400 text-xs animate-pulse">
-              A procurar utilizadores...
-            </div>
-          ) : usuariosFiltrados.length === 0 ? (
-            <div className="bg-white p-8 rounded-2xl text-center border text-gray-400 text-xs">
-              Nenhum utilizador encontrado com "{busca}".
-            </div>
-          ) : (
-            usuariosFiltrados.map((u) => (
-              <div
-                key={u.id}
-                className="bg-white p-3 rounded-xl border shadow-sm flex items-center justify-between gap-3 hover:border-blue-300 transition"
-              >
-                <div className="flex items-center gap-3">
-                  {u.photoURL ? (
-                    <img
-                      src={u.photoURL}
-                      alt={u.nome}
-                      className="w-10 h-10 rounded-full object-cover border"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm">
-                      {u.nome ? u.nome[0].toUpperCase() : "U"}
-                    </div>
-                  )}
-
-                  <div>
-                    <h3 className="font-bold text-sm text-gray-800">{u.nome}</h3>
-                    <p className="text-xs text-gray-400">{u.email}</p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => handleIniciarConversa(u)}
-                  className="bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition"
-                >
-                  <FaComments size={14} /> Mensagem
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      </main>
-
-      <BottomNavigation />
+            <p className="mt-1 font-semibold">
+              {pesquisa}
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

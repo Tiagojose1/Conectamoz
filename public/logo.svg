@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Gradiente da Opção 10: Rosa -> Roxo -> Azul -->
+    <linearGradient id="gradientMaster" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#EC4899" />
+      <stop offset="50%" stop-color="#8B5CF6" />
+      <stop offset="100%" stop-color="#3B82F6" />
+    </linearGradient>
+  </defs>
+
+  <!-- Fundo do Ícone (Esquinas Arredondadas) -->
+  <rect width="512" height="512" rx="112" fill="url(#gradientMaster)" />
+
+  <!-- Texto KV Centralizado -->
+  <text x="50%" y="52%" dominant-baseline="middle" text-anchor="middle" fill="#FFFFFF" font-family="Arial, sans-serif" font-weight="900" font-size="200" letter-spacing="-5">
+    KV
+  </text>
+
+  <!-- Nome KonnexVib no Rodapé -->
+  <text x="50%" y="82%" dominant-baseline="middle" text-anchor="middle" fill="#FFFFFF" font-family="Arial, sans-serif" font-weight="700" font-size="36" letter-spacing="4" opacity="0.9">
+    KONNEXVIB
+  </text>
+</svg>

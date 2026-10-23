@@ -1,732 +1,331 @@
-// src/Pages/Profile.jsx
-
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { useNavigate, useParams } from "react-router-dom";
-
-import { auth, db } from "../firebase";
-
-import {
-  doc,
-  getDoc,
-  collection,
-  query,
-  where,
-  getDocs,
-  updateDoc,
-  writeBatch,
-} from "firebase/firestore";
-
-import { uploadParaCloudinary } from "../Utils/Cloudinary";
-
-import PostCard from "../Components/PostCard";
-
 import {
   FaArrowLeft,
-  FaEdit,
-  FaUserCircle,
+  FaCog,
   FaCamera,
-  FaCheckCircle,
-  FaSpinner,
+  FaImage,
+  FaVideo,
+  FaTh,
+  FaUserFriends,
 } from "react-icons/fa";
+import { useAuth } from "../context/AuthContext";
 
 export default function Profile() {
-  const { userId } = useParams();
+  const { id } = useParams();
   const navigate = useNavigate();
-
-  const currentUser = auth.currentUser;
-
-  const isOwnProfile =
-    currentUser && currentUser.uid === userId;
-
-  // ================================
-  // ESTADOS
-  // ================================
-
-  const [usuario, setUsuario] = useState(null);
-  const [posts, setPosts] = useState([]);
-
-  const [carregando, setCarregando] = useState(true);
-
-  // Edição
-  const [editando, setEditando] = useState(false);
-
-  const [novoNome, setNovoNome] = useState("");
-  const [novaBio, setNovaBio] = useState("");
-
-  const [novaFoto, setNovaFoto] = useState(null);
-  const [fotoPreview, setFotoPreview] = useState(null);
-
-  const [salvando, setSalvando] = useState(false);
-
-  // ================================
-  // CARREGAR PERFIL
-  // ================================
-
-  useEffect(() => {
-    const carregarPerfilEPosts = async () => {
-      if (!userId) return;
-
-      try {
-        setCarregando(true);
-
-        // --------------------------------
-        // 1. PERFIL
-        // --------------------------------
-
-        const userRef = doc(db, "users", userId);
-
-        const userSnap = await getDoc(userRef);
-
-        if (userSnap.exists()) {
-          const dadosUser = userSnap.data();
-
-          setUsuario(dadosUser);
-
-          setNovoNome(
-            dadosUser.nome ||
-              dadosUser.displayName ||
-              ""
-          );
-
-          setNovaBio(
-            dadosUser.bio || ""
-          );
-
-          setFotoPreview(
-            dadosUser.fotoUrl ||
-              dadosUser.photoURL ||
-              null
-          );
-        } else {
-          setUsuario(null);
-        }
-
-        // --------------------------------
-        // 2. POSTS DO UTILIZADOR
-        // --------------------------------
-
-        const postsRef = collection(db, "posts");
-
-        const q = query(
-          postsRef,
-          where("autorId", "==", userId)
-        );
-
-        const querySnapshot = await getDocs(q);
-
-        const userPosts = querySnapshot.docs
-          .map((item) => ({
-            id: item.id,
-            ...item.data(),
-          }))
-          .sort((a, b) => {
-            const dataA =
-              a.criadoEm?.seconds ||
-              a.createdAt?.seconds ||
-              0;
-
-            const dataB =
-              b.criadoEm?.seconds ||
-              b.createdAt?.seconds ||
-              0;
-
-            return dataB - dataA;
-          });
-
-        setPosts(userPosts);
-      } catch (error) {
-        console.error(
-          "Erro ao carregar perfil:",
-          error
-        );
-      } finally {
-        setCarregando(false);
-      }
-    };
-
-    carregarPerfilEPosts();
-  }, [userId]);
-
-  // ================================
-  // ESCOLHER FOTO
-  // ================================
-
-  const handleFotoChange = (event) => {
-    const file = event.target.files?.[0];
-
-    if (!file) return;
-
-    // Verificar se é imagem
-    if (!file.type.startsWith("image/")) {
-      alert("Selecione uma imagem válida.");
-      return;
-    }
-
-    // Limite de 10 MB
-    if (file.size > 10 * 1024 * 1024) {
-      alert(
-        "A imagem deve ter no máximo 10 MB."
-      );
-      return;
-    }
-
-    setNovaFoto(file);
-
-    const previewUrl =
-      URL.createObjectURL(file);
-
-    setFotoPreview(previewUrl);
-  };
-
-  // ================================
-  // CANCELAR EDIÇÃO
-  // ================================
-
-  const cancelarEdicao = () => {
-    setEditando(false);
-
-    setNovoNome(
-      usuario?.nome ||
-        usuario?.displayName ||
-        ""
-    );
-
-    setNovaBio(
-      usuario?.bio || ""
-    );
-
-    setFotoPreview(
-      usuario?.fotoUrl ||
-        usuario?.photoURL ||
-        null
-    );
-
-    setNovaFoto(null);
-  };
-
-  // ================================
-  // SALVAR PERFIL
-  // ================================
-
-  const salvarPerfil = async (event) => {
-    event.preventDefault();
-
-    if (!isOwnProfile) {
-      alert(
-        "Não tens permissão para editar este perfil."
-      );
-      return;
-    }
-
-    if (!novoNome.trim()) {
-      alert("Digite o seu nome.");
-      return;
-    }
-
-    try {
-      setSalvando(true);
-
-      // --------------------------------
-      // FOTO ATUAL
-      // --------------------------------
-
-      let urlFotoFinal =
-        usuario?.fotoUrl ||
-        usuario?.photoURL ||
-        "";
-
-      // --------------------------------
-      // UPLOAD PARA CLOUDINARY
-      // --------------------------------
-
-      if (novaFoto) {
-        const resultado =
-          await uploadParaCloudinary(
-            novaFoto,
-            "profile"
-          );
-
-        urlFotoFinal =
-          resultado?.secure_url ||
-          resultado?.url ||
-          "";
-
-        if (!urlFotoFinal) {
-          throw new Error(
-            "O Cloudinary não devolveu o endereço da imagem."
-          );
-        }
-      }
-
-      // --------------------------------
-      // DADOS DO UTILIZADOR
-      // --------------------------------
-
-      const userRef = doc(
-        db,
-        "users",
-        userId
-      );
-
-      const novosDados = {
-        nome: novoNome.trim(),
-
-        displayName: novoNome.trim(),
-
-        bio: novaBio.trim(),
-
-        fotoUrl: urlFotoFinal,
-
-        photoURL: urlFotoFinal,
-
-        atualizadoEm: new Date(),
-      };
-
-      // --------------------------------
-      // ATUALIZAR FIRESTORE
-      // --------------------------------
-
-      await updateDoc(
-        userRef,
-        novosDados
-      );
-
-      // --------------------------------
-      // ATUALIZAR POSTS ANTIGOS
-      // --------------------------------
-
-      if (posts.length > 0) {
-        const batchSize = 450;
-
-        for (
-          let i = 0;
-          i < posts.length;
-          i += batchSize
-        ) {
-          const batch = writeBatch(db);
-
-          const chunk = posts.slice(
-            i,
-            i + batchSize
-          );
-
-          chunk.forEach((post) => {
-            const postRef = doc(
-              db,
-              "posts",
-              post.id
-            );
-
-            batch.update(postRef, {
-              autorNome:
-                novoNome.trim(),
-
-              author:
-                novoNome.trim(),
-
-              autorFoto:
-                urlFotoFinal,
-            });
-          });
-
-          await batch.commit();
-        }
-      }
-
-      // --------------------------------
-      // ATUALIZAR ESTADO LOCAL
-      // --------------------------------
-
-      setUsuario((prev) => ({
-        ...prev,
-        ...novosDados,
-      }));
-
-      setPosts((prev) =>
-        prev.map((post) => ({
-          ...post,
-
-          autorNome:
-            novoNome.trim(),
-
-          author:
-            novoNome.trim(),
-
-          autorFoto:
-            urlFotoFinal,
-        }))
-      );
-
-      setNovoNome(
-        novoNome.trim()
-      );
-
-      setNovaBio(
-        novaBio.trim()
-      );
-
-      setNovaFoto(null);
-
-      setEditando(false);
-
-      alert(
-        "Perfil atualizado com sucesso!"
-      );
-    } catch (error) {
-      console.error(
-        "Erro ao atualizar perfil:",
-        error
-      );
-
-      alert(
-        error?.message ||
-          "Não foi possível atualizar o perfil."
-      );
-    } finally {
-      setSalvando(false);
-    }
-  };
-
-  // ================================
-  // CARREGANDO
-  // ================================
-
-  if (carregando) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <FaSpinner
-            className="animate-spin text-blue-600"
-            size={28}
-          />
-
-          <p className="text-sm text-gray-500">
-            A carregar perfil...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // ================================
-  // UTILIZADOR NÃO ENCONTRADO
-  // ================================
-
-  if (!usuario) {
-    return (
-      <div className="max-w-lg mx-auto p-6 text-center">
-        <h3 className="text-lg font-semibold text-gray-800">
-          Utilizador não encontrado
-        </h3>
-
-        <button
-          onClick={() => navigate("/")}
-          className="mt-4 px-4 py-2 bg-blue-600 text-white text-sm rounded-xl font-medium hover:bg-blue-700 transition"
-        >
-          Voltar ao Feed
-        </button>
-      </div>
-    );
-  }
-
-  // ================================
-  // NOME
-  // ================================
-
-  const nomeUsuario =
-    usuario.nome ||
-    usuario.displayName ||
-    "Utilizador KonnexVib";
-
-  // ================================
-  // FOTO
-  // ================================
-
-  const fotoUsuario =
-    usuario.fotoUrl ||
-    usuario.photoURL ||
-    null;
-
-  // ================================
-  // VERIFICADO
-  // ================================
-
-  const verificado =
-    usuario.verificado ||
-    usuario.isVerified ||
-    false;
-
-  // ================================
-  // RENDER
-  // ================================
+  const { currentUser } = useAuth();
+
+  /*
+   * Se não existir ID na URL,
+   * estamos a visualizar o próprio perfil.
+   */
+  const isOwnProfile = !id;
+
+  const displayName =
+    currentUser?.displayName || "Utilizador";
+
+  const username =
+    currentUser?.username ||
+    displayName
+      .toLowerCase()
+      .replace(/\s+/g, "")
+      .replace(/[^a-z0-9_]/g, "");
+
+  const userAvatar =
+    currentUser?.photoURL ||
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(
+      displayName
+    )}&background=635BFF&color=fff&size=256`;
 
   return (
-    <div className="max-w-lg mx-auto p-4 space-y-6">
+    <div className="min-h-screen bg-[#f7f7f8] pb-20">
 
-      {/* VOLTAR */}
+      {/* ==================================================
+          TOPO
+      ================================================== */}
+      <header className="fixed left-0 right-0 top-0 z-40 border-b border-gray-200 bg-white">
+        <div className="mx-auto flex h-[64px] max-w-3xl items-center justify-between px-3 sm:px-4">
 
-      <button
-        onClick={() => navigate(-1)}
-        className="flex items-center gap-2 text-gray-600 hover:text-gray-900 text-sm font-medium"
-      >
-        <FaArrowLeft size={14} />
+          {/* VOLTAR */}
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="flex h-10 w-10 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-100 active:scale-95"
+            aria-label="Voltar"
+            title="Voltar"
+          >
+            <FaArrowLeft size={18} />
+          </button>
 
-        Voltar
-      </button>
+          {/* TÍTULO */}
+          <h1 className="text-base font-bold text-gray-900">
+            Perfil
+          </h1>
 
-      {/* PERFIL */}
+          {/* DEFINIÇÕES */}
+          <button
+            type="button"
+            onClick={() => navigate("/settings")}
+            className="flex h-10 w-10 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-100 active:scale-95"
+            aria-label="Definições"
+            title="Definições"
+          >
+            <FaCog size={19} />
+          </button>
+        </div>
+      </header>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+      {/* ==================================================
+          CONTEÚDO
+      ================================================== */}
+      <main className="mx-auto max-w-3xl px-3 pt-[80px] sm:px-4">
 
-        <div className="flex items-center gap-4">
+        {/* ==================================================
+            CARTÃO PRINCIPAL DO PERFIL
+        ================================================== */}
+        <section className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-sm">
 
-          {/* FOTO */}
+          {/* CAPA */}
+          <div className="relative h-32 bg-gradient-to-r from-[#635BFF] via-[#7169ff] to-[#392FB8] sm:h-40">
 
-          <div className="relative">
+            {/* Efeito decorativo */}
+            <div className="absolute -right-10 -top-16 h-44 w-44 rounded-full bg-white/10 blur-2xl" />
 
-            {fotoPreview ? (
-              <img
-                src={fotoPreview}
-                alt={nomeUsuario}
-                className="w-20 h-20 rounded-full object-cover border-2 border-blue-600"
-              />
-            ) : (
-              <FaUserCircle className="w-20 h-20 text-gray-300" />
-            )}
+            <div className="absolute -bottom-20 -left-10 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
 
-            {/* BOTÃO CÂMERA */}
-
-            {editando &&
-              isOwnProfile && (
-                <label className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full cursor-pointer hover:bg-blue-700 shadow">
-
-                  <FaCamera size={12} />
-
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={
-                      handleFotoChange
-                    }
-                    className="hidden"
-                  />
-                </label>
-              )}
           </div>
 
           {/* INFORMAÇÕES */}
+          <div className="px-4 pb-5 sm:px-6">
 
-          <div className="flex-1 min-w-0">
+            {/* FOTO */}
+            <div className="-mt-14 flex items-end justify-between">
 
-            <div className="flex items-center gap-1.5">
+              <div className="relative">
 
-              <h2 className="text-xl font-bold text-gray-900 truncate">
-                {nomeUsuario}
-              </h2>
-
-              {verificado && (
-                <FaCheckCircle
-                  className="text-blue-500 text-base shrink-0"
-                  title="Conta Verificada"
+                <img
+                  src={userAvatar}
+                  alt={`Foto de perfil de ${displayName}`}
+                  className="h-28 w-28 rounded-full border-4 border-white bg-gray-100 object-cover shadow-md sm:h-32 sm:w-32"
                 />
-              )}
+
+                {/* CÂMERA */}
+                {isOwnProfile && (
+                  <button
+                    type="button"
+                    className="absolute bottom-1 right-1 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-[#635BFF] text-white shadow-md transition hover:bg-[#5148e5] active:scale-95"
+                    aria-label="Alterar foto de perfil"
+                    title="Alterar foto de perfil"
+                  >
+                    <FaCamera size={14} />
+                  </button>
+                )}
+              </div>
+
+              {/* BOTÃO */}
+              <div className="mb-1">
+                {isOwnProfile ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate("/edit-profile")}
+                    className="rounded-full border border-gray-300 bg-white px-5 py-2 text-sm font-semibold text-gray-800 transition hover:bg-gray-50 active:scale-95"
+                  >
+                    Editar perfil
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="rounded-full bg-[#635BFF] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#5148e5] active:scale-95"
+                  >
+                    Seguir
+                  </button>
+                )}
+              </div>
             </div>
 
-            <p className="text-sm text-gray-500 truncate">
-              {usuario.email ||
-                currentUser?.email ||
-                ""}
-            </p>
-
-            <p className="text-xs text-blue-600 font-semibold mt-1">
-              {posts.length}{" "}
-              {posts.length === 1
-                ? "Publicação"
-                : "Publicações"}
-            </p>
-          </div>
-        </div>
-
-        {/* BIO */}
-
-        {usuario.bio &&
-          !editando && (
-            <p className="mt-4 text-sm text-gray-700 bg-gray-50 p-3 rounded-xl border border-gray-100">
-              {usuario.bio}
-            </p>
-          )}
-
-        {/* EDITAR */}
-
-        {isOwnProfile &&
-          !editando && (
-            <button
-              onClick={() =>
-                setEditando(true)
-              }
-              className="mt-4 w-full flex items-center justify-center gap-2 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-xl transition"
-            >
-              <FaEdit size={14} />
-
-              Editar Perfil
-            </button>
-          )}
-
-        {/* FORMULÁRIO */}
-
-        {editando && (
-          <form
-            onSubmit={salvarPerfil}
-            className="mt-4 space-y-3"
-          >
-
             {/* NOME */}
+            <div className="mt-4">
+              <h2 className="text-xl font-black tracking-tight text-gray-900">
+                {displayName}
+              </h2>
 
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">
-                Nome
-              </label>
-
-              <input
-                type="text"
-                value={novoNome}
-                onChange={(e) =>
-                  setNovoNome(
-                    e.target.value
-                  )
-                }
-                maxLength={80}
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-600"
-                required
-              />
+              <p className="mt-0.5 text-sm text-gray-500">
+                @{username || "utilizador"}
+              </p>
             </div>
 
             {/* BIO */}
+            <p className="mt-3 max-w-xl text-sm leading-6 text-gray-700">
+              Bem-vindo ao meu perfil no KonnexVib. ✨
+              <br />
+              Conecta-te. Partilha. Vive a tua vibe.
+            </p>
 
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">
-                Biografia
-              </label>
-
-              <textarea
-                value={novaBio}
-                onChange={(e) =>
-                  setNovaBio(
-                    e.target.value
-                  )
-                }
-                rows={3}
-                maxLength={250}
-                placeholder="Escreve algo sobre ti..."
-                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-600 resize-none"
-              />
-            </div>
-
-            {/* BOTÕES */}
-
-            <div className="flex gap-2">
+            {/* ==================================================
+                ESTATÍSTICAS
+            ================================================== */}
+            <div className="mt-5 grid grid-cols-3 border-y border-gray-100 py-4">
 
               <button
-                type="submit"
-                disabled={salvando}
-                className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition disabled:opacity-50 flex items-center justify-center gap-2"
+                type="button"
+                onClick={() => navigate("/profile")}
+                className="text-center transition hover:opacity-70"
               >
-                {salvando ? (
-                  <>
-                    <FaSpinner className="animate-spin" />
+                <strong className="block text-lg font-black text-gray-900">
+                  0
+                </strong>
 
-                    A guardar...
-                  </>
-                ) : (
-                  "Guardar"
-                )}
+                <span className="text-xs text-gray-500">
+                  Publicações
+                </span>
               </button>
 
               <button
                 type="button"
-                onClick={cancelarEdicao}
-                disabled={salvando}
-                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-xl transition disabled:opacity-50"
+                onClick={() => navigate("/followers")}
+                className="border-x border-gray-100 text-center transition hover:opacity-70"
               >
-                Cancelar
+                <strong className="block text-lg font-black text-gray-900">
+                  0
+                </strong>
+
+                <span className="text-xs text-gray-500">
+                  Seguidores
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate("/following")}
+                className="text-center transition hover:opacity-70"
+              >
+                <strong className="block text-lg font-black text-gray-900">
+                  0
+                </strong>
+
+                <span className="text-xs text-gray-500">
+                  Seguindo
+                </span>
               </button>
 
             </div>
-          </form>
-        )}
-      </div>
-
-      {/* PUBLICAÇÕES */}
-
-      <div className="space-y-4">
-
-        <h3 className="text-base font-bold text-gray-800 px-1">
-          Publicações
-        </h3>
-
-        {posts.length === 0 ? (
-          <div className="bg-white rounded-2xl p-6 text-center text-gray-500 text-sm border border-gray-100">
-            Nenhuma publicação feita até ao momento.
           </div>
-        ) : (
-          posts.map((post) => (
-            <PostCard
-              key={post.id}
+        </section>
 
-              id={post.id}
+        {/* ==================================================
+            ABAS DO PERFIL
+        ================================================== */}
+        <section className="mt-4 overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-sm">
 
-              autorId={
-                post.autorId
-              }
+          <div className="grid grid-cols-3 border-b border-gray-200">
 
-              author={
-                post.author ||
-                post.autorNome ||
-                nomeUsuario
-              }
+            {/* PUBLICAÇÕES */}
+            <button
+              type="button"
+              className="flex h-12 items-center justify-center gap-2 border-b-2 border-[#635BFF] text-[#635BFF]"
+            >
+              <FaTh size={15} />
 
-              content={
-                post.content ||
-                post.conteudo ||
-                ""
-              }
+              <span className="hidden text-xs font-bold sm:block">
+                Publicações
+              </span>
+            </button>
 
-              likes={
-                post.curtidas ||
-                post.likes ||
-                []
-              }
+            {/* FOTOS */}
+            <button
+              type="button"
+              className="flex h-12 items-center justify-center gap-2 text-gray-500 transition hover:bg-gray-50 hover:text-[#635BFF]"
+            >
+              <FaImage size={16} />
 
-              comentarios={
-                post.comentarios ||
-                []
-              }
+              <span className="hidden text-xs font-bold sm:block">
+                Fotos
+              </span>
+            </button>
 
-              imagemUrl={
-                post.imagemUrl ||
-                ""
-              }
+            {/* VÍDEOS */}
+            <button
+              type="button"
+              className="flex h-12 items-center justify-center gap-2 text-gray-500 transition hover:bg-gray-50 hover:text-[#635BFF]"
+            >
+              <FaVideo size={16} />
 
-              videoUrl={
-                post.videoUrl ||
-                ""
-              }
+              <span className="hidden text-xs font-bold sm:block">
+                Vídeos
+              </span>
+            </button>
 
-              autorFoto={
-                post.autorFoto ||
-                fotoUsuario ||
-                ""
-              }
+          </div>
 
-              verificado={
-                verificado ||
-                post.verificado ||
-                false
-              }
-            />
-          ))
+          {/* ==================================================
+              ESTADO VAZIO
+          ================================================== */}
+          <div className="flex min-h-[250px] flex-col items-center justify-center px-6 text-center">
+
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-purple-50 text-[#635BFF]">
+              <FaTh size={24} />
+            </div>
+
+            <h3 className="mt-4 text-base font-bold text-gray-800">
+              Ainda não há publicações
+            </h3>
+
+            <p className="mt-1 max-w-sm text-xs leading-5 text-gray-500">
+              Quando este utilizador publicar alguma coisa,
+              as publicações aparecerão aqui.
+            </p>
+
+            {isOwnProfile && (
+              <button
+                type="button"
+                onClick={() => navigate("/create-post")}
+                className="mt-5 rounded-full bg-[#635BFF] px-5 py-2.5 text-xs font-bold text-white transition hover:bg-[#5148e5] active:scale-95"
+              >
+                Criar publicação
+              </button>
+            )}
+
+          </div>
+        </section>
+
+        {/* ==================================================
+            AMIGOS
+        ================================================== */}
+        {isOwnProfile && (
+          <section className="mt-4 rounded-2xl border border-gray-200/80 bg-white p-4 shadow-sm">
+
+            <div className="flex items-center justify-between">
+
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-purple-50 text-[#635BFF]">
+                  <FaUserFriends size={17} />
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">
+                    Amigos
+                  </h3>
+
+                  <p className="text-xs text-gray-500">
+                    0 amigos
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => navigate("/friends")}
+                className="text-xs font-bold text-[#635BFF] hover:underline"
+              >
+                Ver todos
+              </button>
+
+            </div>
+          </section>
         )}
-      </div>
+
+      </main>
     </div>
   );
 }

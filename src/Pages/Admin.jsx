@@ -11,7 +11,7 @@ import {
   orderBy,
   limit 
 } from "firebase/firestore";
-import { auth, db } from "../firebase";
+import { auth, db } from "../../../Conectamoz/src/firebase";
 import { 
   FaBriefcase, 
   FaComments, 
